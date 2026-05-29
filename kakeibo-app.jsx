@@ -8,8 +8,8 @@
 フェーズ4:  ①収入タブ                   [✅]
 フェーズ5:  ②支出タブ 前半（入力・一覧） [✅]
 フェーズ6:  ②支出タブ 後半（分析・予算） [✅]
-フェーズ7:  ③ローンタブ 前半（登録・一覧）[ ]
-フェーズ8:  ③ローンタブ 後半（返済表・繰上）[ ]
+フェーズ7:  ③ローンタブ 前半（登録・一覧）[✅]
+フェーズ8:  ③ローンタブ 後半（返済表・繰上）[✅]
 フェーズ9:  ④資産タブ 銀行・株式・投信   [ ]
 フェーズ10: ④資産タブ NISA・iDeCo       [ ]
 フェーズ11: ④資産タブ 変額年金・総資産   [ ]
@@ -1277,11 +1277,348 @@ function ExpenseBudget({ data, updateData, month, setMonth, monthExpenses }) {
   );
 }
 
+// ===== フェーズ7・8: ローンタブ =====
+
+const LOAN_TYPES = [
+  { value: "car", label: "🚗 車" },
+  { value: "housing", label: "🏠 住宅" },
+  { value: "scholarship", label: "🎓 奨学金" },
+  { value: "other", label: "💰 その他" },
+];
+const LOAN_TYPE_ICON = { car: "🚗", housing: "🏠", scholarship: "🎓", other: "💰" };
+
 function LoanTab({ data, updateData }) {
+  const [subtab, setSubtab] = useState("一覧");
+  const [selectedLoan, setSelectedLoan] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+
+  const tabs = ["一覧", "登録", "返済表", "繰上シミュ"];
+
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ color: colors.text, margin: 0 }}>🏦 ローン</h2>
-      <p style={{ color: colors.textLight }}>フェーズ7・8で実装予定</p>
+    <div>
+      <PageTitle title="🏦 ローン・返済" />
+      <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto" }}>
+        {tabs.map((t) => (
+          <button key={t} onClick={() => setSubtab(t)} style={{
+            flex: "0 0 auto", padding: "8px 16px",
+            backgroundColor: subtab === t ? colors.loan : "#EEE",
+            color: subtab === t ? "#fff" : colors.text,
+            border: "none", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer",
+          }}>{t}</button>
+        ))}
+      </div>
+      <div style={{ padding: "0 16px" }}>
+        {subtab === "一覧"     && <LoanList    data={data} updateData={updateData} setSubtab={setSubtab} setSelectedLoan={setSelectedLoan} />}
+        {subtab === "登録"     && <LoanForm    data={data} updateData={updateData} setSubtab={setSubtab} />}
+        {subtab === "返済表"   && <LoanSchedule data={data} selectedLoan={selectedLoan} setSelectedLoan={setSelectedLoan} />}
+        {subtab === "繰上シミュ" && <LoanPrepay  data={data} selectedLoan={selectedLoan} setSelectedLoan={setSelectedLoan} />}
+      </div>
+    </div>
+  );
+}
+
+// ローン一覧
+function LoanList({ data, updateData, setSubtab, setSelectedLoan }) {
+  const totalBalance = data.loans.reduce((a, l) => a + l.remainingBalance, 0);
+  const totalMonthly = data.loans.reduce((a, l) => a + l.monthlyPayment, 0);
+
+  const del = (id) => {
+    if (window.confirm("このローンを削除しますか？")) {
+      updateData((prev) => ({ ...prev, loans: prev.loans.filter((l) => l.id !== id) }));
+    }
+  };
+
+  return (
+    <div>
+      {data.loans.length > 0 && (
+        <Card>
+          <SectionHeader title="ローン合計" />
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1, backgroundColor: "#FEF3E2", borderRadius: 10, padding: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: colors.textLight }}>残高合計</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: colors.loan }}>{fmtYen(totalBalance)}</div>
+            </div>
+            <div style={{ flex: 1, backgroundColor: "#FEF3E2", borderRadius: 10, padding: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: colors.textLight }}>月返済合計</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: colors.loan }}>{fmtYen(totalMonthly)}</div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {data.loans.map((loan) => {
+        const monthsLeft = loan.monthlyPayment > 0 ? Math.ceil(loan.remainingBalance / loan.monthlyPayment) : 0;
+        const progress = loan.totalAmount > 0 ? (1 - loan.remainingBalance / loan.totalAmount) * 100 : 0;
+        return (
+          <Card key={loan.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <div>
+                <span style={{ fontSize: 20, marginRight: 6 }}>{LOAN_TYPE_ICON[loan.type] || "💰"}</span>
+                <span style={{ fontSize: 16, fontWeight: 700 }}>{loan.name}</span>
+              </div>
+              <button onClick={() => del(loan.id)} style={{ background: "none", border: "none", color: colors.expense, cursor: "pointer", fontSize: 18 }}>🗑</button>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>残高</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: colors.loan }}>{fmtYen(loan.remainingBalance)}</span>
+            </div>
+            <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: colors.textLight }}>月返済: <strong>{fmtYen(loan.monthlyPayment)}</strong></div>
+              <div style={{ fontSize: 12, color: colors.textLight }}>年利: <strong>{loan.interestRate}%</strong></div>
+              <div style={{ fontSize: 12, color: colors.textLight }}>残り: <strong>{monthsLeft}回</strong></div>
+            </div>
+            <ProgressBar value={progress} max={100} color={colors.loan} showPercent={false} />
+            <div style={{ fontSize: 11, color: colors.textLight, marginTop: 4, textAlign: "right" }}>
+              返済完了 {Math.round(progress)}%
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <OutlineButton color={colors.loan} style={{ flex: 1, fontSize: 12 }}
+                onClick={() => { setSelectedLoan(loan.id); setSubtab("返済表"); }}>返済表を見る</OutlineButton>
+              <OutlineButton color={colors.saving} style={{ flex: 1, fontSize: 12 }}
+                onClick={() => { setSelectedLoan(loan.id); setSubtab("繰上シミュ"); }}>繰上シミュ</OutlineButton>
+            </div>
+          </Card>
+        );
+      })}
+
+      <PrimaryButton color={colors.loan} onClick={() => setSubtab("登録")}>
+        ＋ ローンを登録する
+      </PrimaryButton>
+    </div>
+  );
+}
+
+// ローン登録フォーム
+function LoanForm({ data, updateData, setSubtab }) {
+  const [form, setForm] = useState({
+    type: "car", name: "", totalAmount: 0, remainingBalance: 0,
+    monthlyPayment: 0, interestRate: 0, startDate: "", endDate: "", memo: "",
+  });
+  const [saved, setSaved] = useState(false);
+
+  const save = () => {
+    if (!form.name || !form.remainingBalance) return;
+    updateData((prev) => ({ ...prev, loans: [...prev.loans, { ...form, id: genId(), payments: [] }] }));
+    setSaved(true);
+    setTimeout(() => { setSaved(false); setSubtab("一覧"); }, 1000);
+  };
+
+  const F = (field) => (v) => setForm((f) => ({ ...f, [field]: v }));
+
+  return (
+    <Card>
+      <SectionHeader title="ローン登録" color={colors.loan} />
+      <SelectInput label="ローン種類" value={form.type} onChange={F("type")} options={LOAN_TYPES} />
+      <TextInput label="ローン名（例: トヨタファイナンス）" value={form.name} onChange={F("name")} placeholder="ローン名" />
+      <AmountInput label="借入総額" value={form.totalAmount} onChange={F("totalAmount")} />
+      <AmountInput label="現在の残高" value={form.remainingBalance} onChange={F("remainingBalance")} />
+      <AmountInput label="月々返済額" value={form.monthlyPayment} onChange={F("monthlyPayment")} />
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>年利（%）</label>
+        <input type="number" inputMode="decimal" value={form.interestRate || ""} onChange={(e) => F("interestRate")(parseFloat(e.target.value) || 0)}
+          placeholder="例: 2.5"
+          style={{ width: "100%", padding: 12, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1, marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>借入開始日</label>
+          <input type="month" value={form.startDate} onChange={(e) => F("startDate")(e.target.value)}
+            style={{ width: "100%", padding: 12, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+        </div>
+        <div style={{ flex: 1, marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>完済予定日</label>
+          <input type="month" value={form.endDate} onChange={(e) => F("endDate")(e.target.value)}
+            style={{ width: "100%", padding: 12, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+        </div>
+      </div>
+      <TextInput label="メモ" value={form.memo} onChange={F("memo")} placeholder="メモ（任意）" />
+      <PrimaryButton onClick={save} color={saved ? colors.neutral : colors.loan}>
+        {saved ? "✅ 登録しました" : "登録する"}
+      </PrimaryButton>
+    </Card>
+  );
+}
+
+// 返済スケジュール表
+function LoanSchedule({ data, selectedLoan, setSelectedLoan }) {
+  const loan = data.loans.find((l) => l.id === selectedLoan) || data.loans[0];
+
+  if (!loan) return <EmptyState message="ローンが登録されていません" />;
+
+  // 返済スケジュール計算
+  const schedule = (() => {
+    const rows = [];
+    let balance = loan.remainingBalance;
+    const monthlyRate = loan.interestRate / 100 / 12;
+    const payment = loan.monthlyPayment;
+    let month = new Date();
+
+    for (let i = 1; balance > 0 && i <= 600; i++) {
+      const interest = Math.round(balance * monthlyRate);
+      const principal = Math.min(payment - interest, balance);
+      const actualPayment = Math.min(payment, balance + interest);
+      balance = Math.max(0, balance - principal);
+      const dateStr = `${month.getFullYear()}/${String(month.getMonth() + 1).padStart(2, "0")}`;
+      rows.push({ no: i, date: dateStr, payment: actualPayment, principal, interest, balance });
+      month = new Date(month.getFullYear(), month.getMonth() + 1, 1);
+      if (balance <= 0) break;
+    }
+    return rows;
+  })();
+
+  const totalInterest = schedule.reduce((a, r) => a + r.interest, 0);
+
+  return (
+    <div>
+      <SelectInput label="ローンを選択" value={loan.id}
+        onChange={(v) => setSelectedLoan(v)}
+        options={data.loans.map((l) => ({ value: l.id, label: `${LOAN_TYPE_ICON[l.type]} ${l.name}` }))} />
+      <Card>
+        <SectionHeader title={`${LOAN_TYPE_ICON[loan.type]} ${loan.name}`} color={colors.loan} />
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>残高</span>
+          <span style={{ fontSize: 18, fontWeight: 700, color: colors.loan }}>{fmtYen(loan.remainingBalance)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>総利息</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: colors.expense }}>{fmtYen(totalInterest)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>完済まで</span>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{schedule.length}回（{Math.floor(schedule.length / 12)}年{schedule.length % 12}ヶ月）</span>
+        </div>
+      </Card>
+      <Card>
+        <SectionHeader title="返済スケジュール" />
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ backgroundColor: "#F5F5F5" }}>
+                {["回", "日付", "返済額", "元金", "利息", "残高"].map((h) => (
+                  <th key={h} style={{ padding: "6px 4px", textAlign: "right", color: colors.textLight, fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {schedule.slice(0, 60).map((r) => (
+                <tr key={r.no} style={{ borderBottom: "1px solid #F0F0F0" }}>
+                  <td style={{ padding: "6px 4px", textAlign: "right", color: colors.textLight }}>{r.no}</td>
+                  <td style={{ padding: "6px 4px", textAlign: "right" }}>{r.date}</td>
+                  <td style={{ padding: "6px 4px", textAlign: "right", fontWeight: 600 }}>{fmt(r.payment)}</td>
+                  <td style={{ padding: "6px 4px", textAlign: "right", color: colors.saving }}>{fmt(r.principal)}</td>
+                  <td style={{ padding: "6px 4px", textAlign: "right", color: colors.expense }}>{fmt(r.interest)}</td>
+                  <td style={{ padding: "6px 4px", textAlign: "right" }}>{fmt(r.balance)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {schedule.length > 60 && (
+            <p style={{ textAlign: "center", color: colors.textLight, fontSize: 12, margin: "8px 0" }}>
+              （以降{schedule.length - 60}回分は省略）
+            </p>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// 繰上返済シミュレーター
+function LoanPrepay({ data, selectedLoan, setSelectedLoan }) {
+  const [prepayAmount, setPrepayAmount] = useState(0);
+  const [result, setResult] = useState(null);
+  const loan = data.loans.find((l) => l.id === selectedLoan) || data.loans[0];
+
+  if (!loan) return <EmptyState message="ローンが登録されていません" />;
+
+  const calcSchedule = (balance, monthly, annualRate) => {
+    const monthlyRate = annualRate / 100 / 12;
+    let rows = 0;
+    let totalInterest = 0;
+    while (balance > 0 && rows < 600) {
+      const interest = Math.round(balance * monthlyRate);
+      const principal = Math.min(monthly - interest, balance);
+      if (principal <= 0) break;
+      balance = Math.max(0, balance - principal);
+      totalInterest += interest;
+      rows++;
+    }
+    return { months: rows, totalInterest };
+  };
+
+  const simulate = () => {
+    const orig = calcSchedule(loan.remainingBalance, loan.monthlyPayment, loan.interestRate);
+    const after = calcSchedule(Math.max(0, loan.remainingBalance - prepayAmount), loan.monthlyPayment, loan.interestRate);
+    setResult({
+      origMonths: orig.months,
+      afterMonths: after.months,
+      savedMonths: orig.months - after.months,
+      savedInterest: orig.totalInterest - after.totalInterest,
+    });
+  };
+
+  return (
+    <div>
+      <SelectInput label="ローンを選択" value={loan.id}
+        onChange={(v) => setSelectedLoan(v)}
+        options={data.loans.map((l) => ({ value: l.id, label: `${LOAN_TYPE_ICON[l.type]} ${l.name}` }))} />
+
+      <Card>
+        <SectionHeader title="繰上返済シミュレーター" color={colors.saving} />
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>残高: </span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: colors.loan }}>{fmtYen(loan.remainingBalance)}</span>
+        </div>
+        <AmountInput label="繰上返済額" value={prepayAmount} onChange={setPrepayAmount} />
+        <PrimaryButton onClick={simulate} color={colors.saving}>シミュレーション実行</PrimaryButton>
+
+        {result && (
+          <div style={{ marginTop: 16 }}>
+            <Divider />
+            <div style={{ backgroundColor: "#EBF5FB", borderRadius: 10, padding: 12, marginTop: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: colors.saving, marginBottom: 8 }}>📊 シミュレーション結果</div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 13, color: colors.textLight }}>現在の完済まで</span>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{result.origMonths}ヶ月</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 13, color: colors.textLight }}>繰上後の完済まで</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: colors.income }}>{result.afterMonths}ヶ月</span>
+              </div>
+              <Divider />
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: colors.income }}>短縮期間</span>
+                <span style={{ fontSize: 18, fontWeight: 800, color: colors.income }}>▲{result.savedMonths}ヶ月</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: colors.income }}>利息節約額</span>
+                <span style={{ fontSize: 18, fontWeight: 800, color: colors.income }}>{fmtYen(result.savedInterest)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* ローン返済優先度アドバイス */}
+      {data.loans.length > 1 && (
+        <Card>
+          <SectionHeader title="返済優先度アドバイス" color={colors.loan} />
+          <div style={{ fontSize: 13, color: colors.textLight, marginBottom: 8 }}>
+            💡 金利の高いローンから返済する「アバランチ法」が利息節約に効果的です。
+          </div>
+          {[...data.loans].sort((a, b) => b.interestRate - a.interestRate).map((l, i) => (
+            <div key={l.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F0F0F0" }}>
+              <div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: i === 0 ? colors.expense : colors.text }}>
+                  {i + 1}位 {LOAN_TYPE_ICON[l.type]} {l.name}
+                </span>
+                {i === 0 && <Badge label="最優先" bgColor={colors.expense} style={{ marginLeft: 6 }} />}
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: colors.loan }}>年利{l.interestRate}%</span>
+            </div>
+          ))}
+        </Card>
+      )}
     </div>
   );
 }
