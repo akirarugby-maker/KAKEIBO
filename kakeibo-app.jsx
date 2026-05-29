@@ -628,6 +628,11 @@ function HomeTab({ data, updateData }) {
   const today = new Date();
   const ym = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
 
+  // 先月のYM
+  const prevMonth = today.getMonth() === 0
+    ? `${today.getFullYear() - 1}-12`
+    : `${today.getFullYear()}-${String(today.getMonth()).padStart(2, "0")}`;
+
   // 今月の給与データ
   const thisSalary = data.salaries.find((s) => s.month === ym);
   const grossIncome = thisSalary
@@ -649,9 +654,42 @@ function HomeTab({ data, updateData }) {
   const idecoVal = data.assets.ideco?.currentValue || 0;
   const annuityVal = (data.assets.variableAnnuities || []).reduce((a, v) => a + v.currentValue, 0);
   const totalAsset = bankTotal + investTotal + idecoVal + annuityVal;
-
   const totalLoan = (data.loans || []).reduce((a, l) => a + l.remainingBalance, 0);
   const netWorth = totalAsset - totalLoan;
+
+  // 先月の収支を将来予測の基準に
+  const prevSalary = data.salaries.find((s) => s.month === prevMonth);
+  const prevIncome = prevSalary
+    ? prevSalary.basicSalary
+      + Object.values(prevSalary.allowances || {}).reduce((a, b) => a + b, 0)
+      - Object.values(prevSalary.deductions || {}).reduce((a, b) => a + b, 0)
+      + (prevSalary.bonus || 0) + (prevSalary.sideIncome || 0)
+    : netIncome;
+  const prevExpense = data.expenses
+    .filter((e) => e.date?.startsWith(prevMonth))
+    .reduce((a, e) => a + e.amount, 0);
+  const monthlyBalance = prevIncome > 0 ? prevIncome - prevExpense : balance;
+  const baseMonth = prevIncome > 0 ? prevMonth : ym;
+
+  // ローン残高のn年後を計算
+  const loanAfterMonths = (months) => data.loans.reduce((sum, loan) => {
+    const rate = loan.interestRate / 100 / 12;
+    let bal = loan.remainingBalance;
+    for (let i = 0; i < months && bal > 0; i++) {
+      if (rate > 0) bal = Math.max(0, bal - (loan.monthlyPayment - Math.round(bal * rate)));
+      else          bal = Math.max(0, bal - loan.monthlyPayment);
+    }
+    return sum + bal;
+  }, 0);
+
+  // 将来予測の行
+  const forecasts = [5, 10, 15, 20].map((years) => {
+    const months = years * 12;
+    const futureAsset   = totalAsset + monthlyBalance * months;
+    const futureLoan    = loanAfterMonths(months);
+    const futureNetWorth = futureAsset - futureLoan;
+    return { years, futureAsset, futureLoan, futureNetWorth };
+  });
 
   // 今月の貯蓄目標
   const goalSaving = data.settings.monthlyGoalSaving || 50000;
@@ -675,16 +713,21 @@ function HomeTab({ data, updateData }) {
   // ローン残高一覧
   const loanTypeIcon = { car: "🚗", housing: "🏠", scholarship: "🎓", other: "💰" };
 
+  const [bm_y, bm_m] = baseMonth.split("-").map(Number);
+
   return (
     <div>
-      <PageTitle title="🏠 ホーム" subtitle={`${today.getFullYear()}年${today.getMonth() + 1}月`} />
+      {/* ページタイトル */}
+      <div style={{ padding: "16px 16px 4px", display: "flex", alignItems: "baseline", gap: 10 }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>家計簿</span>
+        <span style={{ fontSize: 16, fontWeight: 600, color: colors.textLight }}>
+          {today.getFullYear()}年{today.getMonth() + 1}月
+        </span>
+      </div>
 
       {/* 1. 今月の収支カード */}
       <div style={{ padding: "0 16px" }}>
         <Card style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "#fff" }}>
-          <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
-            {today.getFullYear()}年{today.getMonth() + 1}月
-          </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ fontSize: 14, opacity: 0.9 }}>手取り</span>
             <span style={{ fontSize: 22, fontWeight: 700 }}>{fmtYen(netIncome)}</span>
@@ -721,6 +764,43 @@ function HomeTab({ data, updateData }) {
             </div>
           ))}
         </div>
+
+        {/* 将来予測カード */}
+        <Card style={{ border: `1.5px solid ${colors.asset}` }}>
+          <SectionHeader title="【予想】将来の資産・負債" color={colors.asset} />
+          <div style={{ fontSize: 11, color: colors.textLight, marginBottom: 10 }}>
+            {bm_y}年{bm_m}月の収支（月{monthlyBalance >= 0 ? "+" : ""}{fmtYen(monthlyBalance)}）を元に計算しています
+          </div>
+          {/* ヘッダー行 */}
+          <div style={{ display: "flex", borderBottom: "1.5px solid #EEE", paddingBottom: 6, marginBottom: 4 }}>
+            <div style={{ flex: "0 0 52px" }} />
+            {["総資産", "ローン残高", "純資産"].map((h) => (
+              <div key={h} style={{ flex: 1, textAlign: "right", fontSize: 11, fontWeight: 700, color: colors.textLight }}>{h}</div>
+            ))}
+          </div>
+          {/* 現在 */}
+          <div style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #F0F0F0" }}>
+            <div style={{ flex: "0 0 52px", fontSize: 12, fontWeight: 700, color: colors.text }}>現在</div>
+            <div style={{ flex: 1, textAlign: "right", fontSize: 12, fontWeight: 600, color: colors.asset }}>{fmtYen(totalAsset)}</div>
+            <div style={{ flex: 1, textAlign: "right", fontSize: 12, fontWeight: 600, color: colors.loan }}>{fmtYen(totalLoan)}</div>
+            <div style={{ flex: 1, textAlign: "right", fontSize: 13, fontWeight: 800, color: netWorth >= 0 ? colors.income : colors.expense }}>
+              {netWorth < 0 ? "▲" : ""}{fmtYen(Math.abs(netWorth))}
+            </div>
+          </div>
+          {/* 5・10・15・20年後 */}
+          {forecasts.map(({ years, futureAsset, futureLoan, futureNetWorth }) => (
+            <div key={years} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #F5F5F5" }}>
+              <div style={{ flex: "0 0 52px", fontSize: 12, fontWeight: 700, color: colors.asset }}>{years}年後</div>
+              <div style={{ flex: 1, textAlign: "right", fontSize: 12, color: colors.asset }}>{fmtYen(Math.max(0, futureAsset))}</div>
+              <div style={{ flex: 1, textAlign: "right", fontSize: 12, color: colors.loan }}>
+                {futureLoan > 0 ? fmtYen(futureLoan) : <span style={{ color: colors.income, fontWeight: 700 }}>完済</span>}
+              </div>
+              <div style={{ flex: 1, textAlign: "right", fontSize: 13, fontWeight: 800, color: futureNetWorth >= 0 ? colors.income : colors.expense }}>
+                {futureNetWorth < 0 ? "▲" : ""}{fmtYen(Math.abs(futureNetWorth))}
+              </div>
+            </div>
+          ))}
+        </Card>
 
         {/* 3. 支出カテゴリ円グラフ */}
         {pieData.length > 0 ? (
