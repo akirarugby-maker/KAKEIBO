@@ -70,6 +70,14 @@ var initialState = {
     "交際費": 20000,
     "車関係": 20000,
     "被服費": 10000,
+    "こづかい1": 10000,
+    "こづかい2": 10000,
+    "楽天カード1": 30000,
+    "楽天カード2": 30000,
+    "イオンカード1": 30000,
+    "イオンカード2": 30000,
+    "奨学金返済1": 20000,
+    "奨学金返済2": 20000,
     "クレジットカード": 30000,
     "その他": 10000
   },
@@ -155,6 +163,38 @@ var EXPENSE_CATS = [{
   name: "被服費",
   color: "#607D8B",
   isFixed: false
+}, {
+  name: "こづかい1",
+  color: "#FF7043",
+  isFixed: false
+}, {
+  name: "こづかい2",
+  color: "#FF8A65",
+  isFixed: false
+}, {
+  name: "楽天カード1",
+  color: "#BF0000",
+  isFixed: false
+}, {
+  name: "楽天カード2",
+  color: "#D32F2F",
+  isFixed: false
+}, {
+  name: "イオンカード1",
+  color: "#E91E63",
+  isFixed: false
+}, {
+  name: "イオンカード2",
+  color: "#F06292",
+  isFixed: false
+}, {
+  name: "奨学金返済1",
+  color: "#5C6BC0",
+  isFixed: true
+}, {
+  name: "奨学金返済2",
+  color: "#7986CB",
+  isFixed: true
 }, {
   name: "クレジットカード",
   color: "#1565C0",
