@@ -1981,28 +1981,39 @@ function AssetTab({ data, updateData }) {
 
 // 銀行・現金
 function BankTab({ data, updateData }) {
+  const [editingId, setEditingId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", balance: 0, type: "普通", memo: "" });
+  const blankBank = () => ({ name: "", balance: 0, type: "普通", memo: "" });
+  const [form, setForm] = useState(blankBank());
 
   const accounts = data.assets.bankAccounts || [];
   const total = accounts.reduce((a, b) => a + b.balance, 0);
 
-  const add = () => {
+  const resetForm = () => { setForm(blankBank()); setEditingId(null); setShowAdd(false); };
+
+  const save = () => {
     if (!form.name) return;
-    updateData((prev) => ({
-      ...prev, assets: { ...prev.assets, bankAccounts: [...(prev.assets.bankAccounts || []), { ...form, id: genId() }] }
-    }));
-    setForm({ name: "", balance: 0, type: "普通", memo: "" });
-    setShowAdd(false);
+    if (editingId) {
+      updateData((prev) => ({
+        ...prev, assets: { ...prev.assets, bankAccounts: prev.assets.bankAccounts.map((a) => a.id === editingId ? { ...a, ...form } : a) }
+      }));
+    } else {
+      updateData((prev) => ({
+        ...prev, assets: { ...prev.assets, bankAccounts: [...(prev.assets.bankAccounts || []), { ...form, id: genId() }] }
+      }));
+    }
+    resetForm();
   };
 
   const del = (id) => updateData((prev) => ({
     ...prev, assets: { ...prev.assets, bankAccounts: prev.assets.bankAccounts.filter((a) => a.id !== id) }
   }));
 
-  const update = (id, field, val) => updateData((prev) => ({
-    ...prev, assets: { ...prev.assets, bankAccounts: prev.assets.bankAccounts.map((a) => a.id === id ? { ...a, [field]: val } : a) }
-  }));
+  const startEdit = (acc) => {
+    setForm({ name: acc.name, balance: acc.balance, type: acc.type, memo: acc.memo || "" });
+    setEditingId(acc.id);
+    setShowAdd(true);
+  };
 
   return (
     <div>
@@ -2018,23 +2029,28 @@ function BankTab({ data, updateData }) {
             <div>
               <div style={{ fontSize: 15, fontWeight: 700 }}>{acc.name}</div>
               <Badge label={acc.type} bgColor={colors.asset} style={{ marginTop: 4 }} />
+              {acc.memo ? <div style={{ fontSize: 11, color: colors.textLight, marginTop: 4 }}>{acc.memo}</div> : null}
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: colors.asset }}>{fmtYen(acc.balance)}</div>
-              <button onClick={() => del(acc.id)} style={{ fontSize: 11, color: colors.expense, background: "none", border: "none", cursor: "pointer", marginTop: 4 }}>削除</button>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+                <button onClick={() => startEdit(acc)} style={{ background: "none", border: "none", color: colors.saving, cursor: "pointer", fontSize: 16 }}>✏️</button>
+                <button onClick={() => del(acc.id)} style={{ background: "none", border: "none", color: colors.expense, cursor: "pointer", fontSize: 16 }}>🗑</button>
+              </div>
             </div>
           </div>
         </Card>
       ))}
       {showAdd ? (
         <Card>
-          <SectionHeader title="口座追加" />
+          <SectionHeader title={editingId ? "口座を編集" : "口座を追加"} color={colors.asset} />
           <TextInput label="銀行名・口座名" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="例: 三菱UFJ 普通" />
           <AmountInput label="残高" value={form.balance} onChange={(v) => setForm((f) => ({ ...f, balance: v }))} />
           <SelectInput label="種別" value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v }))} options={["普通", "定期", "積立", "MMF", "その他"]} />
+          <TextInput label="メモ（任意）" value={form.memo} onChange={(v) => setForm((f) => ({ ...f, memo: v }))} placeholder="メモ" />
           <div style={{ display: "flex", gap: 8 }}>
-            <PrimaryButton onClick={add} color={colors.asset} style={{ flex: 1 }}>追加</PrimaryButton>
-            <OutlineButton onClick={() => setShowAdd(false)} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
+            <PrimaryButton onClick={save} color={colors.asset} style={{ flex: 1 }}>{editingId ? "保存" : "追加"}</PrimaryButton>
+            <OutlineButton onClick={resetForm} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
           </div>
         </Card>
       ) : (
@@ -2404,28 +2420,45 @@ function IdecoTab({ data, updateData }) {
 
 // 変額年金保険
 function AnnuityTab({ data, updateData }) {
+  const [editingId, setEditingId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const annuities = data.assets.variableAnnuities || [];
 
-  const [form, setForm] = useState({
+  const blankAnnuity = () => ({
     name: "", contractDate: "", monthlyPremium: 0, totalPremium: 0,
-    currentValue: 0, maturityDate: "", maturityAmount: 0, deathBenefit: 0,
-    fundAllocation: [{ fundName: "", allocation: 100 }], memo: "",
+    currentValue: 0, maturityDate: "", maturityAmount: 0, deathBenefit: 0, memo: "",
   });
+  const [form, setForm] = useState(blankAnnuity());
+  const F = (field) => (v) => setForm((f) => ({ ...f, [field]: v }));
 
-  const add = () => {
+  const resetForm = () => { setForm(blankAnnuity()); setEditingId(null); setShowAdd(false); };
+
+  const save = () => {
     if (!form.name) return;
-    updateData((prev) => ({
-      ...prev, assets: { ...prev.assets, variableAnnuities: [...(prev.assets.variableAnnuities || []), { ...form, id: genId() }] }
-    }));
-    setShowAdd(false);
+    if (editingId) {
+      updateData((prev) => ({
+        ...prev, assets: { ...prev.assets, variableAnnuities: prev.assets.variableAnnuities.map((a) => a.id === editingId ? { ...a, ...form } : a) }
+      }));
+    } else {
+      updateData((prev) => ({
+        ...prev, assets: { ...prev.assets, variableAnnuities: [...(prev.assets.variableAnnuities || []), { ...form, id: genId() }] }
+      }));
+    }
+    resetForm();
   };
 
   const del = (id) => updateData((prev) => ({
     ...prev, assets: { ...prev.assets, variableAnnuities: prev.assets.variableAnnuities.filter((a) => a.id !== id) }
   }));
 
-  const F = (field) => (v) => setForm((f) => ({ ...f, [field]: v }));
+  const startEdit = (ann) => {
+    setForm({ name: ann.name, contractDate: ann.contractDate || "", monthlyPremium: ann.monthlyPremium || 0,
+      totalPremium: ann.totalPremium || 0, currentValue: ann.currentValue || 0,
+      maturityDate: ann.maturityDate || "", maturityAmount: ann.maturityAmount || 0,
+      deathBenefit: ann.deathBenefit || 0, memo: ann.memo || "" });
+    setEditingId(ann.id);
+    setShowAdd(true);
+  };
 
   return (
     <div>
@@ -2434,9 +2467,12 @@ function AnnuityTab({ data, updateData }) {
         const pct = ann.totalPremium > 0 ? (pnl / ann.totalPremium * 100).toFixed(2) : 0;
         return (
           <Card key={ann.id}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>{ann.name}</div>
-              <button onClick={() => del(ann.id)} style={{ fontSize: 11, color: colors.expense, background: "none", border: "none", cursor: "pointer" }}>削除</button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>{ann.name}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => startEdit(ann)} style={{ background: "none", border: "none", color: colors.saving, cursor: "pointer", fontSize: 16 }}>✏️</button>
+                <button onClick={() => del(ann.id)} style={{ background: "none", border: "none", color: colors.expense, cursor: "pointer", fontSize: 16 }}>🗑</button>
+              </div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
               <span style={{ fontSize: 13, color: colors.textLight }}>現在評価額</span>
@@ -2446,6 +2482,12 @@ function AnnuityTab({ data, updateData }) {
               <span style={{ fontSize: 13, color: colors.textLight }}>払込保険料</span>
               <span style={{ fontSize: 14 }}>{fmtYen(ann.totalPremium)}</span>
             </div>
+            {ann.monthlyPremium > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 13, color: colors.textLight }}>月額保険料</span>
+                <span style={{ fontSize: 14 }}>{fmtYen(ann.monthlyPremium)}</span>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ fontSize: 14, fontWeight: 700 }}>含み損益</span>
               <span style={{ fontSize: 16, fontWeight: 700, color: pnl >= 0 ? colors.income : colors.expense }}>
@@ -2458,7 +2500,7 @@ function AnnuityTab({ data, updateData }) {
 
       {showAdd ? (
         <Card>
-          <SectionHeader title="変額年金保険を追加" />
+          <SectionHeader title={editingId ? "変額年金を編集" : "変額年金保険を追加"} color={colors.asset} />
           <TextInput label="保険会社・商品名" value={form.name} onChange={F("name")} placeholder="例: 日本生命 変額年金" />
           <AmountInput label="月額保険料" value={form.monthlyPremium} onChange={F("monthlyPremium")} />
           <AmountInput label="累計払込保険料" value={form.totalPremium} onChange={F("totalPremium")} />
@@ -2471,8 +2513,8 @@ function AnnuityTab({ data, updateData }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <PrimaryButton onClick={add} color={colors.asset} style={{ flex: 1 }}>追加</PrimaryButton>
-            <OutlineButton onClick={() => setShowAdd(false)} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
+            <PrimaryButton onClick={save} color={colors.asset} style={{ flex: 1 }}>{editingId ? "保存" : "追加"}</PrimaryButton>
+            <OutlineButton onClick={resetForm} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
           </div>
         </Card>
       ) : (
