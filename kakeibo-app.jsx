@@ -52,11 +52,12 @@ const initialState = {
   salaries: [],
   expenses: [],
   futurePlans: [],
+  customCats: [],
   budgets: {
     "食費": 50000, "外食": 20000, "住居費": 80000, "光熱費": 15000,
     "通信費": 10000, "交通費": 20000, "保険料": 30000, "医療費": 10000,
     "勉強費": 10000, "雑費": 15000, "交際費": 20000, "車関係": 20000,
-    "被服費": 10000, "その他": 10000,
+    "被服費": 10000, "クレジットカード": 30000, "その他": 10000,
   },
   loans: [],
   assets: {
@@ -100,8 +101,9 @@ const EXPENSE_CATS = [
   { name: "雑費",     color: "#795548", isFixed: false },
   { name: "交際費",   color: "#FF9800", isFixed: false },
   { name: "車関係",   color: "#546E7A", isFixed: false },
-  { name: "被服費",   color: "#607D8B", isFixed: false },
-  { name: "その他",   color: "#95A5A6", isFixed: false },
+  { name: "被服費",       color: "#607D8B", isFixed: false },
+  { name: "クレジットカード", color: "#1565C0", isFixed: false },
+  { name: "その他",       color: "#95A5A6", isFixed: false },
   { name: "NISA積立", color: "#27AE60", isFixed: true, isInvest: true },
   { name: "iDeCo",   color: "#2980B9", isFixed: true, isInvest: true },
   { name: "変額年金", color: "#8E44AD", isFixed: true, isInvest: true },
@@ -1522,6 +1524,8 @@ function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate })
   const dateLabel = `${y}年${mm}月${d}日`;
   const [selectedCat, setSelectedCat] = useState(null);
   const [inputVal, setInputVal] = useState(0);
+  const [showAddCat, setShowAddCat] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
 
   // 資産管理からの月額参照（投資カテゴリのデフォルト値）
   const investDefaults = {
@@ -1601,7 +1605,7 @@ function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate })
 
       {/* カテゴリ一覧 */}
       <div style={{ padding: "0 16px" }}>
-        {EXPENSE_CATS.map((cat) => {
+        {[...EXPENSE_CATS, ...(data.customCats || []).map((c) => ({ name: c.name, color: c.color, isFixed: false }))].map((cat) => {
           const total = catTotal(cat.name);
           const isOpen = selectedCat === cat.name;
           const defaultAmt = investDefaults[cat.name] || 0;
@@ -1669,6 +1673,62 @@ function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate })
             </div>
           );
         })}
+
+        {/* カスタムカテゴリ追加 */}
+        {!showAddCat ? (
+          <button onClick={() => setShowAddCat(true)} style={{
+            width: "100%", marginTop: 6, padding: "12px 14px", borderRadius: 12,
+            border: "1.5px dashed #BBB", backgroundColor: "transparent",
+            fontSize: 14, color: colors.textLight, cursor: "pointer", textAlign: "left",
+          }}>
+            ＋ カテゴリを追加
+          </button>
+        ) : (
+          <div style={{
+            marginTop: 6, padding: "14px", borderRadius: 12,
+            border: `1.5px solid ${colors.expense}`, backgroundColor: "#FFF5F5",
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: colors.expense, marginBottom: 10 }}>新しいカテゴリ名</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newCatName.trim()) {
+                    const name = newCatName.trim();
+                    const palette = ["#E91E63","#009688","#FF5722","#3F51B5","#795548","#607D8B","#FF9800"];
+                    const color = palette[(data.customCats || []).length % palette.length];
+                    updateData((prev) => ({ ...prev, customCats: [...(prev.customCats || []), { id: genId(), name, color }] }));
+                    setNewCatName(""); setShowAddCat(false);
+                  }
+                }}
+                placeholder="例：ペット費"
+                autoFocus
+                style={{
+                  flex: 1, padding: "10px 12px", fontSize: 15,
+                  border: `1.5px solid ${colors.expense}`, borderRadius: 10,
+                  boxSizing: "border-box",
+                }}
+              />
+              <button onClick={() => {
+                const name = newCatName.trim();
+                if (!name) return;
+                const palette = ["#E91E63","#009688","#FF5722","#3F51B5","#795548","#607D8B","#FF9800"];
+                const color = palette[(data.customCats || []).length % palette.length];
+                updateData((prev) => ({ ...prev, customCats: [...(prev.customCats || []), { id: genId(), name, color }] }));
+                setNewCatName(""); setShowAddCat(false);
+              }} style={{
+                padding: "10px 16px", backgroundColor: colors.expense, color: "#fff",
+                border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
+              }}>追加</button>
+              <button onClick={() => { setNewCatName(""); setShowAddCat(false); }} style={{
+                padding: "10px 14px", backgroundColor: "#EEE", color: colors.text,
+                border: "none", borderRadius: 10, fontSize: 14, cursor: "pointer",
+              }}>✕</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
