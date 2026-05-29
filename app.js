@@ -78,7 +78,9 @@ var initialState = {
       growthUsed: 0,
       // lifetimeUsed は tsumitateUsed + growthUsed から自動計算
       year: new Date().getFullYear(),
-      investments: [] // NISA保有銘柄
+      monthlyContribution: 0,
+      // NISA月額積立
+      investments: []
     },
     ideco: {
       monthlyContribution: 0,
@@ -957,7 +959,7 @@ function PageTitle(_ref15) {
 // ===== フェーズ3: ホーム（ダッシュボード）=====
 
 function HomeTab(_ref16) {
-  var _data$assets$nisa, _data$assets$ideco;
+  var _data$assets$nisa, _data$assets$ideco, _data$assets$nisa2, _data$assets$ideco2;
   var data = _ref16.data,
     updateData = _ref16.updateData;
   var today = new Date();
@@ -1035,10 +1037,18 @@ function HomeTab(_ref16) {
     }, 0);
   };
 
+  // 資産管理の月額積立合計（NISA＋iDeCo＋変額年金）
+  var nisaMonthly = ((_data$assets$nisa2 = data.assets.nisa) === null || _data$assets$nisa2 === void 0 ? void 0 : _data$assets$nisa2.monthlyContribution) || 0;
+  var idecoMonthly = ((_data$assets$ideco2 = data.assets.ideco) === null || _data$assets$ideco2 === void 0 ? void 0 : _data$assets$ideco2.monthlyContribution) || 0;
+  var annuityMonthly = (data.assets.variableAnnuities || []).reduce(function (a, v) {
+    return a + (v.monthlyPremium || 0);
+  }, 0);
+  var totalMonthlyInvest = nisaMonthly + idecoMonthly + annuityMonthly;
+
   // 将来予測の行
   var forecasts = [5, 10, 15, 20].map(function (years) {
     var months = years * 12;
-    var futureAsset = totalAsset + monthlyBalance * months;
+    var futureAsset = totalAsset + monthlyBalance * months + totalMonthlyInvest * months;
     var futureLoan = loanAfterMonths(months);
     var futureNetWorth = futureAsset - futureLoan;
     return {
@@ -1229,7 +1239,7 @@ function HomeTab(_ref16) {
       color: colors.textLight,
       marginBottom: 10
     }
-  }, bm_y, "\u5E74", bm_m, "\u6708\u306E\u53CE\u652F\uFF08\u6708", monthlyBalance >= 0 ? "+" : "", fmtYen(monthlyBalance), "\uFF09\u3092\u5143\u306B\u8A08\u7B97\u3057\u3066\u3044\u307E\u3059"), /*#__PURE__*/React.createElement("div", {
+  }, bm_y, "\u5E74", bm_m, "\u6708\u306E\u53CE\u652F\uFF08\u6708", monthlyBalance >= 0 ? "+" : "", fmtYen(monthlyBalance), "\uFF09\u3092\u5143\u306B\u8A08\u7B97\u3057\u3066\u3044\u307E\u3059", totalMonthlyInvest > 0 && /*#__PURE__*/React.createElement("span", null, "\u3000\uFF0B\u3000NISA\u30FBiDeCo\u30FB\u5909\u984D\u5E74\u91D1 \u6708", fmtYen(totalMonthlyInvest), "\u3092\u52A0\u7B97")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       borderBottom: "1.5px solid #EEE",
@@ -4504,7 +4514,23 @@ function NisaTab(_ref38) {
       max: limit,
       color: color
     }));
-  })), investments.length > 0 && /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+  })), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: "\u6708\u984D\u7A4D\u7ACB\u8A2D\u5B9A",
+    color: colors.income
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "NISA\u6708\u984D\u7A4D\u7ACB\u984D",
+    value: nisa.monthlyContribution || 0,
+    onChange: function onChange(v) {
+      return updateNisa({
+        monthlyContribution: v
+      });
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: colors.textLight
+    }
+  }, "\u5C06\u6765\u8CC7\u7523\u4E88\u6E2C\uFF08\u30DB\u30FC\u30E0\u753B\u9762\uFF09\u306B\u53CD\u6620\u3055\u308C\u307E\u3059")), investments.length > 0 && /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
     title: "\u4FDD\u6709\u9298\u67C4 \u8A55\u4FA1\u30B5\u30DE\u30EA\u30FC",
     color: colors.income
   }), /*#__PURE__*/React.createElement("div", {
@@ -5062,15 +5088,15 @@ function AnnuityTab(_ref41) {
 
 // 総資産・純資産
 function NetWorthTab(_ref42) {
-  var _data$assets$nisa2, _data$assets$ideco2;
+  var _data$assets$nisa3, _data$assets$ideco3;
   var data = _ref42.data;
   var bankTotal = (data.assets.bankAccounts || []).reduce(function (a, b) {
     return a + b.balance;
   }, 0);
-  var nisaInvest = (((_data$assets$nisa2 = data.assets.nisa) === null || _data$assets$nisa2 === void 0 ? void 0 : _data$assets$nisa2.investments) || []).reduce(function (a, i) {
+  var nisaInvest = (((_data$assets$nisa3 = data.assets.nisa) === null || _data$assets$nisa3 === void 0 ? void 0 : _data$assets$nisa3.investments) || []).reduce(function (a, i) {
     return a + i.currentPrice * i.quantity;
   }, 0);
-  var idecoVal = ((_data$assets$ideco2 = data.assets.ideco) === null || _data$assets$ideco2 === void 0 ? void 0 : _data$assets$ideco2.currentValue) || 0;
+  var idecoVal = ((_data$assets$ideco3 = data.assets.ideco) === null || _data$assets$ideco3 === void 0 ? void 0 : _data$assets$ideco3.currentValue) || 0;
   var annuityVal = (data.assets.variableAnnuities || []).reduce(function (a, v) {
     return a + v.currentValue;
   }, 0);
@@ -5277,14 +5303,14 @@ function SimulationTab(_ref45) {
 // 将来資産シミュレーター
 function FutureAssetSim(_ref46) {
   var data = _ref46.data;
-  var totalAsset = function (_data$assets$nisa3, _data$assets$ideco3) {
+  var totalAsset = function (_data$assets$nisa4, _data$assets$ideco4) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
     }, 0);
-    var i = (((_data$assets$nisa3 = data.assets.nisa) === null || _data$assets$nisa3 === void 0 ? void 0 : _data$assets$nisa3.investments) || []).reduce(function (a, x) {
+    var i = (((_data$assets$nisa4 = data.assets.nisa) === null || _data$assets$nisa4 === void 0 ? void 0 : _data$assets$nisa4.investments) || []).reduce(function (a, x) {
       return a + x.currentPrice * x.quantity;
     }, 0);
-    return b + i + (((_data$assets$ideco3 = data.assets.ideco) === null || _data$assets$ideco3 === void 0 ? void 0 : _data$assets$ideco3.currentValue) || 0);
+    return b + i + (((_data$assets$ideco4 = data.assets.ideco) === null || _data$assets$ideco4 === void 0 ? void 0 : _data$assets$ideco4.currentValue) || 0);
   }();
   var _useState65 = useState(totalAsset || 0),
     _useState66 = _slicedToArray(_useState65, 2),
@@ -5735,14 +5761,14 @@ function RetirementSim(_ref48) {
   var totalNeeded = annualShortfall * lifeYears;
 
   // 現在の準備額
-  var currentSavings = function (_data$assets$nisa4, _data$assets$ideco4) {
+  var currentSavings = function (_data$assets$nisa5, _data$assets$ideco5) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
     }, 0);
-    var i = (((_data$assets$nisa4 = data.assets.nisa) === null || _data$assets$nisa4 === void 0 ? void 0 : _data$assets$nisa4.investments) || []).reduce(function (a, x) {
+    var i = (((_data$assets$nisa5 = data.assets.nisa) === null || _data$assets$nisa5 === void 0 ? void 0 : _data$assets$nisa5.investments) || []).reduce(function (a, x) {
       return a + x.currentPrice * x.quantity;
     }, 0);
-    return b + i + (((_data$assets$ideco4 = data.assets.ideco) === null || _data$assets$ideco4 === void 0 ? void 0 : _data$assets$ideco4.currentValue) || 0) + severance;
+    return b + i + (((_data$assets$ideco5 = data.assets.ideco) === null || _data$assets$ideco5 === void 0 ? void 0 : _data$assets$ideco5.currentValue) || 0) + severance;
   }();
   var shortfall = Math.max(0, totalNeeded - currentSavings);
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
@@ -5975,14 +6001,14 @@ function RetirementSim(_ref48) {
 // FIRE試算
 function FireSim(_ref49) {
   var data = _ref49.data;
-  var totalAsset = function (_data$assets$nisa5, _data$assets$ideco5) {
+  var totalAsset = function (_data$assets$nisa6, _data$assets$ideco6) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
     }, 0);
-    var i = (((_data$assets$nisa5 = data.assets.nisa) === null || _data$assets$nisa5 === void 0 ? void 0 : _data$assets$nisa5.investments) || []).reduce(function (a, x) {
+    var i = (((_data$assets$nisa6 = data.assets.nisa) === null || _data$assets$nisa6 === void 0 ? void 0 : _data$assets$nisa6.investments) || []).reduce(function (a, x) {
       return a + x.currentPrice * x.quantity;
     }, 0);
-    return b + i + (((_data$assets$ideco5 = data.assets.ideco) === null || _data$assets$ideco5 === void 0 ? void 0 : _data$assets$ideco5.currentValue) || 0);
+    return b + i + (((_data$assets$ideco6 = data.assets.ideco) === null || _data$assets$ideco6 === void 0 ? void 0 : _data$assets$ideco6.currentValue) || 0);
   }();
   var _useState87 = useState(totalAsset || 0),
     _useState88 = _slicedToArray(_useState87, 2),

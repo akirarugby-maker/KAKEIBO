@@ -75,7 +75,8 @@ const initialState = {
       growthUsed: 0,
       // lifetimeUsed は tsumitateUsed + growthUsed から自動計算
       year: new Date().getFullYear(),
-      investments: [],  // NISA保有銘柄
+      monthlyContribution: 0,  // NISA月額積立
+      investments: [],
     },
     ideco: {
       monthlyContribution: 0,
@@ -682,11 +683,17 @@ function HomeTab({ data, updateData }) {
     return sum + bal;
   }, 0);
 
+  // 資産管理の月額積立合計（NISA＋iDeCo＋変額年金）
+  const nisaMonthly    = data.assets.nisa?.monthlyContribution || 0;
+  const idecoMonthly   = data.assets.ideco?.monthlyContribution || 0;
+  const annuityMonthly = (data.assets.variableAnnuities || []).reduce((a, v) => a + (v.monthlyPremium || 0), 0);
+  const totalMonthlyInvest = nisaMonthly + idecoMonthly + annuityMonthly;
+
   // 将来予測の行
   const forecasts = [5, 10, 15, 20].map((years) => {
     const months = years * 12;
-    const futureAsset   = totalAsset + monthlyBalance * months;
-    const futureLoan    = loanAfterMonths(months);
+    const futureAsset    = totalAsset + monthlyBalance * months + totalMonthlyInvest * months;
+    const futureLoan     = loanAfterMonths(months);
     const futureNetWorth = futureAsset - futureLoan;
     return { years, futureAsset, futureLoan, futureNetWorth };
   });
@@ -770,6 +777,9 @@ function HomeTab({ data, updateData }) {
           <SectionHeader title="【予想】将来の資産・負債" color={colors.asset} />
           <div style={{ fontSize: 11, color: colors.textLight, marginBottom: 10 }}>
             {bm_y}年{bm_m}月の収支（月{monthlyBalance >= 0 ? "+" : ""}{fmtYen(monthlyBalance)}）を元に計算しています
+            {totalMonthlyInvest > 0 && (
+              <span>　＋　NISA・iDeCo・変額年金 月{fmtYen(totalMonthlyInvest)}を加算</span>
+            )}
           </div>
           {/* ヘッダー行 */}
           <div style={{ display: "flex", borderBottom: "1.5px solid #EEE", paddingBottom: 6, marginBottom: 4 }}>
@@ -2232,6 +2242,17 @@ function NisaTab({ data, updateData }) {
             </div>
           );
         })}
+      </Card>
+
+      {/* 月額積立設定 */}
+      <Card>
+        <SectionHeader title="月額積立設定" color={colors.income} />
+        <AmountInput
+          label="NISA月額積立額"
+          value={nisa.monthlyContribution || 0}
+          onChange={(v) => updateNisa({ monthlyContribution: v })}
+        />
+        <div style={{ fontSize: 11, color: colors.textLight }}>将来資産予測（ホーム画面）に反映されます</div>
       </Card>
 
       {/* 保有銘柄サマリー */}
