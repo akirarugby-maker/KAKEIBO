@@ -1870,6 +1870,7 @@ function NisaTab({ data, updateData }) {
   const investments = nisa.investments || [];
 
   const [showAdd, setShowAdd] = useState(false);
+  const [editingInvestId, setEditingInvestId] = useState(null);
   const [form, setForm] = useState({
     name: "", nisaType: "つみたて", purchasePrice: 0, quantity: 0, currentPrice: 0, memo: "",
   });
@@ -1892,11 +1893,26 @@ function NisaTab({ data, updateData }) {
     ...prev, assets: { ...prev.assets, nisa: { ...prev.assets.nisa, ...obj } }
   }));
 
+  const resetForm = () => {
+    setForm({ name: "", nisaType: "つみたて", purchasePrice: 0, quantity: 0, currentPrice: 0, memo: "" });
+    setEditingInvestId(null);
+    setShowAdd(false);
+  };
+
   const addInvestment = () => {
     if (!form.name) return;
-    updateNisa({ investments: [...investments, { ...form, id: genId() }] });
-    setForm({ name: "", nisaType: "つみたて", purchasePrice: 0, quantity: 0, currentPrice: 0, memo: "" });
-    setShowAdd(false);
+    if (editingInvestId) {
+      updateNisa({ investments: investments.map((i) => i.id === editingInvestId ? { ...i, ...form } : i) });
+    } else {
+      updateNisa({ investments: [...investments, { ...form, id: genId() }] });
+    }
+    resetForm();
+  };
+
+  const startEdit = (inv) => {
+    setForm({ name: inv.name, nisaType: inv.nisaType, purchasePrice: inv.purchasePrice, quantity: inv.quantity, currentPrice: inv.currentPrice, memo: inv.memo || "" });
+    setEditingInvestId(inv.id);
+    setShowAdd(true);
   };
 
   const delInvestment = (id) => updateNisa({ investments: investments.filter((i) => i.id !== id) });
@@ -1979,8 +1995,12 @@ function NisaTab({ data, updateData }) {
                   style={{ marginTop: 4 }}
                 />
               </div>
-              <button onClick={() => delInvestment(inv.id)}
-                style={{ background: "none", border: "none", color: colors.expense, cursor: "pointer", fontSize: 18 }}>🗑</button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => startEdit(inv)}
+                  style={{ background: "none", border: "none", color: colors.saving, cursor: "pointer", fontSize: 18 }}>✏️</button>
+                <button onClick={() => delInvestment(inv.id)}
+                  style={{ background: "none", border: "none", color: colors.expense, cursor: "pointer", fontSize: 18 }}>🗑</button>
+              </div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
               <span style={{ fontSize: 13, color: colors.textLight }}>評価額</span>
@@ -2002,7 +2022,7 @@ function NisaTab({ data, updateData }) {
       {/* 銘柄追加フォーム */}
       {showAdd ? (
         <Card>
-          <SectionHeader title="銘柄を追加" color={colors.income} />
+          <SectionHeader title={editingInvestId ? "銘柄を編集" : "銘柄を追加"} color={colors.income} />
           <TextInput label="ファンド名" value={form.name} onChange={F("name")} placeholder="例: eMAXIS Slim 全世界株式" />
           <SelectInput label="NISA枠の種類" value={form.nisaType} onChange={F("nisaType")}
             options={["つみたて", "成長"]} />
@@ -2016,8 +2036,8 @@ function NisaTab({ data, updateData }) {
           <AmountInput label="現在の基準価額（1口あたり）" value={form.currentPrice} onChange={F("currentPrice")} />
           <TextInput label="メモ（任意）" value={form.memo} onChange={F("memo")} placeholder="メモ" />
           <div style={{ display: "flex", gap: 8 }}>
-            <PrimaryButton onClick={addInvestment} color={colors.income} style={{ flex: 1 }}>追加</PrimaryButton>
-            <OutlineButton onClick={() => setShowAdd(false)} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
+            <PrimaryButton onClick={addInvestment} color={colors.income} style={{ flex: 1 }}>{editingInvestId ? "保存" : "追加"}</PrimaryButton>
+            <OutlineButton onClick={resetForm} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
           </div>
         </Card>
       ) : (
