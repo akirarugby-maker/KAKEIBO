@@ -833,7 +833,21 @@ function IncomeTab({ data, updateData }) {
 
   useEffect(() => {
     const e = data.salaries.find((s) => s.month === month);
-    setForm(e ? { ...e } : { ...blankSalary(), month });
+    if (e) {
+      setForm({ ...e });
+    } else {
+      // 前月データをコピーして翌月の初期値にする
+      const [y, m] = month.split("-").map(Number);
+      const prevMonth = m === 1
+        ? `${y - 1}-12`
+        : `${y}-${String(m - 1).padStart(2, "0")}`;
+      const prev = data.salaries.find((s) => s.month === prevMonth);
+      if (prev) {
+        setForm({ ...prev, month, bonus: 0, memo: "" });
+      } else {
+        setForm({ ...blankSalary(), month });
+      }
+    }
     setSaved(false);
   }, [month, data.salaries]);
 
@@ -910,7 +924,7 @@ function IncomeTab({ data, updateData }) {
 
         {/* 控除セクション */}
         <Card>
-          <Accordion title="【控除】" defaultOpen={false}>
+          <Accordion title="【控除】" defaultOpen={true}>
             <AmountInput label="健康保険料" value={form.deductions.healthInsurance} onChange={setD("healthInsurance")} />
             <AmountInput label="介護保険料" value={form.deductions.nursingInsurance} onChange={setD("nursingInsurance")} />
             <AmountInput label="厚生年金保険料" value={form.deductions.pension} onChange={setD("pension")} />

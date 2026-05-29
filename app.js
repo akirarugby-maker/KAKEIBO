@@ -1348,9 +1348,30 @@ function IncomeTab(_ref20) {
     var e = data.salaries.find(function (s) {
       return s.month === month;
     });
-    setForm(e ? _objectSpread({}, e) : _objectSpread(_objectSpread({}, blankSalary()), {}, {
-      month: month
-    }));
+    if (e) {
+      setForm(_objectSpread({}, e));
+    } else {
+      // 前月データをコピーして翌月の初期値にする
+      var _month$split$map5 = month.split("-").map(Number),
+        _month$split$map6 = _slicedToArray(_month$split$map5, 2),
+        y = _month$split$map6[0],
+        m = _month$split$map6[1];
+      var prevMonth = m === 1 ? "".concat(y - 1, "-12") : "".concat(y, "-").concat(String(m - 1).padStart(2, "0"));
+      var prev = data.salaries.find(function (s) {
+        return s.month === prevMonth;
+      });
+      if (prev) {
+        setForm(_objectSpread(_objectSpread({}, prev), {}, {
+          month: month,
+          bonus: 0,
+          memo: ""
+        }));
+      } else {
+        setForm(_objectSpread(_objectSpread({}, blankSalary()), {}, {
+          month: month
+        }));
+      }
+    }
     setSaved(false);
   }, [month, data.salaries]);
   var setA = function setA(field) {
@@ -1504,7 +1525,7 @@ function IncomeTab(_ref20) {
     }
   }, fmtYen(grossPay))))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(Accordion, {
     title: "\u3010\u63A7\u9664\u3011",
-    defaultOpen: false
+    defaultOpen: true
   }, /*#__PURE__*/React.createElement(AmountInput, {
     label: "\u5065\u5EB7\u4FDD\u967A\u6599",
     value: form.deductions.healthInsurance,
@@ -1748,10 +1769,10 @@ function ExpenseMonthlyView(_ref21) {
     setMonth = _ref21.setMonth,
     onSelectDate = _ref21.onSelectDate;
   var days = daysInMonth(month);
-  var _month$split$map5 = month.split("-").map(Number),
-    _month$split$map6 = _slicedToArray(_month$split$map5, 2),
-    y = _month$split$map6[0],
-    m = _month$split$map6[1];
+  var _month$split$map7 = month.split("-").map(Number),
+    _month$split$map8 = _slicedToArray(_month$split$map7, 2),
+    y = _month$split$map8[0],
+    m = _month$split$map8[1];
   var monthTotal = data.expenses.filter(function (e) {
     var _e$date3;
     return (_e$date3 = e.date) === null || _e$date3 === void 0 ? void 0 : _e$date3.startsWith(month);
