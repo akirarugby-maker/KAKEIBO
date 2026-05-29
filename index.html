@@ -6,9 +6,9 @@
   <title>家計簿アプリ</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/recharts@2.13.3/umd/Recharts.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Noto Sans JP', sans-serif; background: #F8F9FA; }
@@ -27,15 +27,16 @@
     var useRef = React.useRef;
     var useMemo = React.useMemo;
 
-    // Recharts グローバルをローカルに展開
-    var _Recharts = Recharts;
-    var LineChart = _Recharts.LineChart, Line = _Recharts.Line;
-    var BarChart = _Recharts.BarChart, Bar = _Recharts.Bar;
-    var RechartsPie = _Recharts.PieChart, Pie = _Recharts.Pie, Cell = _Recharts.Cell;
-    var XAxis = _Recharts.XAxis, YAxis = _Recharts.YAxis;
-    var CartesianGrid = _Recharts.CartesianGrid, Tooltip = _Recharts.Tooltip;
-    var Legend = _Recharts.Legend, ResponsiveContainer = _Recharts.ResponsiveContainer;
-    var AreaChart = _Recharts.AreaChart, Area = _Recharts.Area;
+    // Recharts グローバルをローカルに展開（読み込み失敗時はダミーを使用）
+    var _Recharts = (typeof Recharts !== 'undefined') ? Recharts : {};
+    var _dummy = function(p){ return React.createElement('div', {style:{color:'#999',fontSize:12,textAlign:'center',padding:8}}, 'グラフ読込中...'); };
+    var LineChart = _Recharts.LineChart||_dummy, Line = _Recharts.Line||_dummy;
+    var BarChart = _Recharts.BarChart||_dummy, Bar = _Recharts.Bar||_dummy;
+    var RechartsPie = _Recharts.PieChart||_dummy, Pie = _Recharts.Pie||_dummy, Cell = _Recharts.Cell||_dummy;
+    var XAxis = _Recharts.XAxis||_dummy, YAxis = _Recharts.YAxis||_dummy;
+    var CartesianGrid = _Recharts.CartesianGrid||_dummy, Tooltip = _Recharts.Tooltip||_dummy;
+    var Legend = _Recharts.Legend||_dummy, ResponsiveContainer = _Recharts.ResponsiveContainer||_dummy;
+    var AreaChart = _Recharts.AreaChart||_dummy, Area = _Recharts.Area||_dummy;
 
     // SVGアイコンコンポーネント（lucide-react代替）
     function Home(p)         { return React.createElement('svg',{width:p.size||20,height:p.size||20,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},React.createElement('path',{d:'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'}),React.createElement('polyline',{points:'9 22 9 12 15 12 15 22'})); }
