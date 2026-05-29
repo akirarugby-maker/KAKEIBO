@@ -232,7 +232,7 @@ function BottomNav({ activeTab, setActiveTab }) {
       transform: "translateX(-50%)",
       width: "100%",
       maxWidth: 430,
-      height: 68,
+      height: 74,
       backgroundColor: "#FFFFFF",
       borderTop: "1px solid #EBEBEB",
       display: "flex",
@@ -286,14 +286,14 @@ function BottomNav({ activeTab, setActiveTab }) {
               }} />
             )}
             <span style={{
-              fontSize: active ? 24 : 21,
+              fontSize: active ? 27 : 23,
               lineHeight: 1,
               filter: active ? "none" : "grayscale(30%)",
               transition: "font-size 0.15s",
               zIndex: 1,
             }}>{tab.emoji}</span>
             <span style={{
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: active ? 800 : 500,
               color: active ? tab.color : "#AAA",
               letterSpacing: active ? "0.02em" : 0,
