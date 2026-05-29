@@ -15,8 +15,8 @@
 フェーズ11: ④資産タブ 変額年金・総資産   [✅]
 フェーズ12: ⑤シミュ 将来資産・ローン完済 [✅]
 フェーズ13: ⑤シミュ 老後資金・FIRE試算  [✅]
-フェーズ14: AI機能統合                  [ ]
-フェーズ15: 仕上げ・CSV出力・バックアップ [ ]
+フェーズ14: AI機能統合                  [✅]
+フェーズ15: 仕上げ・CSV出力・バックアップ [✅]
 ========================================
 */
 
@@ -771,6 +771,12 @@ function HomeTab({ data, updateData }) {
             })}
           </Card>
         )}
+
+        {/* AI アドバイス */}
+        <AIAdvicePanel data={data} />
+
+        {/* データ管理 */}
+        <DataManagementPanel data={data} updateData={updateData} />
 
         {/* 6. 直近の支出履歴 */}
         <Card>
@@ -2530,5 +2536,193 @@ function FireSim({ data }) {
         </Card>
       )}
     </div>
+  );
+}
+
+// ===== フェーズ14: AI機能統合 =====
+
+const callClaudeAPI = async (prompt) => {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 800,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  if (!response.ok) throw new Error(`API Error: ${response.status}`);
+  const data = await response.json();
+  return data.content?.[0]?.text || "";
+};
+
+function AIAdvicePanel({ data }) {
+  const [mode, setMode] = useState("expense");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState("");
+  const [error, setError] = useState("");
+
+  const MODES = [
+    { key: "expense", label: "支出分析" },
+    { key: "loan", label: "ローン戦略" },
+    { key: "asset", label: "資産アドバイス" },
+    { key: "annuity", label: "変額年金評価" },
+  ];
+
+  const buildPrompt = () => {
+    const ym = currentYM();
+    switch (mode) {
+      case "expense": {
+        const monthExp = data.expenses.filter((e) => e.date?.startsWith(ym));
+        const catTotals = {};
+        monthExp.forEach((e) => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
+        return `今月（${ym}）の支出データを分析して、節約アドバイスを3点ほど日本語で具体的に教えてください。\n\n支出データ:\n${JSON.stringify(catTotals, null, 2)}\n\n合計支出: ${monthExp.reduce((a, e) => a + e.amount, 0)}円`;
+      }
+      case "loan":
+        return `以下の複数ローンについて、効率的な返済順序と戦略をアドバイスしてください（日本語で）。\n\n${JSON.stringify(data.loans.map((l) => ({ 名前: l.name, 残高: l.remainingBalance, 月返済: l.monthlyPayment, 年利: l.interestRate })), null, 2)}`;
+      case "asset": {
+        const summary = {
+          銀行預金: (data.assets.bankAccounts || []).reduce((a, b) => a + b.balance, 0),
+          投資資産: (data.assets.investments || []).reduce((a, i) => a + i.currentPrice * i.quantity, 0),
+          iDeCo: data.assets.ideco?.currentValue || 0,
+          変額年金: (data.assets.variableAnnuities || []).reduce((a, v) => a + v.currentValue, 0),
+          ローン残高: data.loans.reduce((a, l) => a + l.remainingBalance, 0),
+        };
+        return `現在の資産配分を分析して、改善点と今後のアドバイスを3点ほど日本語で教えてください。\n\n${JSON.stringify(summary, null, 2)}`;
+      }
+      case "annuity": {
+        const ann = data.assets.variableAnnuities?.[0];
+        if (!ann) return "変額年金保険データがありません。";
+        return `以下の変額年金保険の現状を評価して、継続・解約・見直しについてアドバイスしてください（日本語で）。\n\n${JSON.stringify({ 商品名: ann.name, 累計払込: ann.totalPremium, 現在評価額: ann.currentValue, 月額保険料: ann.monthlyPremium }, null, 2)}`;
+      }
+      default: return "";
+    }
+  };
+
+  const analyze = async () => {
+    setLoading(true);
+    setError("");
+    setResult("");
+    try {
+      const prompt = buildPrompt();
+      const text = await callClaudeAPI(prompt);
+      setResult(text);
+    } catch (e) {
+      setError("AI分析エラー: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <SectionHeader title="🤖 AI財務アドバイス" color={colors.saving} />
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {MODES.map((m) => (
+          <button key={m.key} onClick={() => setMode(m.key)} style={{
+            padding: "6px 12px",
+            backgroundColor: mode === m.key ? colors.saving : "#EEE",
+            color: mode === m.key ? "#fff" : colors.text,
+            border: "none", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>{m.label}</button>
+        ))}
+      </div>
+      <PrimaryButton onClick={analyze} color={colors.saving} disabled={loading}>
+        {loading ? "🔄 AI分析中..." : "AI分析を実行"}
+      </PrimaryButton>
+      {error && <div style={{ marginTop: 10, color: colors.expense, fontSize: 13 }}>{error}</div>}
+      {result && (
+        <div style={{ marginTop: 12, backgroundColor: "#EBF5FB", borderRadius: 10, padding: 12 }}>
+          <div style={{ fontSize: 12, color: colors.saving, fontWeight: 700, marginBottom: 6 }}>💡 AIアドバイス</div>
+          <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{result}</div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ===== フェーズ15: CSV出力・JSONバックアップ =====
+
+function DataManagementPanel({ data, updateData }) {
+  const exportCSV = () => {
+    const header = "日付,カテゴリ,サブカテゴリ,金額,固定費,支払方法,メモ";
+    const rows = data.expenses.map((e) =>
+      `${e.date},${e.category},${e.subcategory || ""},${e.amount},${e.isFixed ? "固定費" : "変動費"},${e.paymentMethod || ""},${e.memo || ""}`
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `kakeibo_expenses_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportJSON = () => {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `kakeibo_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importJSON = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const imported = JSON.parse(ev.target.result);
+        if (window.confirm("バックアップデータを復元しますか？現在のデータは上書きされます。")) {
+          updateData(imported);
+          alert("復元が完了しました。");
+        }
+      } catch {
+        alert("JSONファイルの読み込みに失敗しました。");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const clearData = () => {
+    if (window.confirm("全データを削除しますか？この操作は元に戻せません。")) {
+      if (window.confirm("本当に削除しますか？（2回確認）")) {
+        updateData({ ...initialState });
+        localStorage.removeItem(STORAGE_KEY);
+        alert("データを削除しました。");
+      }
+    }
+  };
+
+  return (
+    <Card>
+      <SectionHeader title="📁 データ管理" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <OutlineButton onClick={exportCSV} color={colors.income} style={{ width: "100%" }}>
+          📊 支出データをCSVエクスポート
+        </OutlineButton>
+        <OutlineButton onClick={exportJSON} color={colors.saving} style={{ width: "100%" }}>
+          💾 全データをJSONバックアップ
+        </OutlineButton>
+        <label style={{
+          display: "block", padding: "10px 16px", textAlign: "center",
+          border: `2px solid ${colors.loan}`, borderRadius: 10, color: colors.loan,
+          fontSize: 14, fontWeight: 600, cursor: "pointer",
+        }}>
+          📂 JSONから復元
+          <input type="file" accept=".json" onChange={importJSON} style={{ display: "none" }} />
+        </label>
+        <OutlineButton onClick={clearData} color={colors.expense} style={{ width: "100%" }}>
+          🗑 全データを削除
+        </OutlineButton>
+      </div>
+    </Card>
   );
 }
