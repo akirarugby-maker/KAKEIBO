@@ -5,7 +5,7 @@
 フェーズ1:  基盤・データ構造・状態管理    [✅]
 フェーズ2:  共通コンポーネント・スマホUI  [✅]
 フェーズ3:  ホーム（ダッシュボード）      [✅]
-フェーズ4:  ①収入タブ                   [ ]
+フェーズ4:  ①収入タブ                   [✅]
 フェーズ5:  ②支出タブ 前半（入力・一覧） [ ]
 フェーズ6:  ②支出タブ 後半（分析・予算） [ ]
 フェーズ7:  ③ローンタブ 前半（登録・一覧）[ ]
@@ -802,11 +802,181 @@ function HomeTab({ data, updateData }) {
   );
 }
 
+// ===== フェーズ4: 収入タブ =====
+
+const blankSalary = () => ({
+  id: genId(),
+  month: currentYM(),
+  basicSalary: 0,
+  allowances: { commuting: 0, housing: 0, overtime: 0, family: 0, other: 0 },
+  deductions: { healthInsurance: 0, nursingInsurance: 0, pension: 0, employmentInsurance: 0, incomeTax: 0, residentTax: 0, other: 0 },
+  bonus: 0,
+  sideIncome: 0,
+  memo: "",
+});
+
 function IncomeTab({ data, updateData }) {
+  const [month, setMonth] = useState(currentYM());
+  const existing = data.salaries.find((s) => s.month === month);
+  const [form, setForm] = useState(existing || blankSalary());
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const e = data.salaries.find((s) => s.month === month);
+    setForm(e ? { ...e } : { ...blankSalary(), month });
+    setSaved(false);
+  }, [month, data.salaries]);
+
+  const setA = (field) => (val) => setForm((f) => ({ ...f, allowances: { ...f.allowances, [field]: val } }));
+  const setD = (field) => (val) => setForm((f) => ({ ...f, deductions: { ...f.deductions, [field]: val } }));
+
+  const grossPay = form.basicSalary + Object.values(form.allowances).reduce((a, b) => a + b, 0);
+  const totalDed = Object.values(form.deductions).reduce((a, b) => a + b, 0);
+  const netPay = grossPay - totalDed;
+  const totalIncome = netPay + (form.bonus || 0) + (form.sideIncome || 0);
+
+  // 固定費（支出の固定費）
+  const fixedExpenses = data.expenses
+    .filter((e) => e.date?.startsWith(month) && e.isFixed)
+    .reduce((a, e) => a + e.amount, 0);
+  // ローン返済合計
+  const loanPayments = data.loans.reduce((a, l) => a + l.monthlyPayment, 0);
+  const disposable = totalIncome - fixedExpenses - loanPayments;
+
+  const save = () => {
+    updateData((prev) => {
+      const exists = prev.salaries.find((s) => s.month === month);
+      if (exists) {
+        return { ...prev, salaries: prev.salaries.map((s) => s.month === month ? { ...form } : s) };
+      }
+      return { ...prev, salaries: [...prev.salaries, { ...form }] };
+    });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  // 月次収入グラフ（直近12ヶ月）
+  const chartData = (() => {
+    const months = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const s = data.salaries.find((x) => x.month === ym);
+      const basic = s ? (s.basicSalary - Object.values(s.deductions || {}).reduce((a, b) => a + b, 0)) : 0;
+      months.push({
+        month: `${d.getMonth() + 1}月`,
+        手取り: Math.max(0, basic + (s?.bonus || 0) + (s?.sideIncome || 0)),
+        基本給: Math.max(0, basic),
+        ボーナス: s?.bonus || 0,
+        副収入: s?.sideIncome || 0,
+      });
+    }
+    return months;
+  })();
+
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ color: colors.text, margin: 0 }}>💴 収入</h2>
-      <p style={{ color: colors.textLight }}>フェーズ4で実装予定</p>
+    <div>
+      <PageTitle title="💴 収入" subtitle="給与明細を入力してください" />
+      <div style={{ padding: "0 16px" }}>
+        <MonthNavigator month={month} setMonth={setMonth} />
+
+        {/* 支給セクション */}
+        <Card>
+          <Accordion title="【支給】" defaultOpen={true}>
+            <AmountInput label="基本給" value={form.basicSalary} onChange={(v) => setForm((f) => ({ ...f, basicSalary: v }))} />
+            <AmountInput label="通勤手当" value={form.allowances.commuting} onChange={setA("commuting")} />
+            <AmountInput label="住宅手当" value={form.allowances.housing} onChange={setA("housing")} />
+            <AmountInput label="残業手当" value={form.allowances.overtime} onChange={setA("overtime")} />
+            <AmountInput label="家族手当" value={form.allowances.family} onChange={setA("family")} />
+            <AmountInput label="その他手当" value={form.allowances.other} onChange={setA("other")} />
+            <Divider />
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>支給合計</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: colors.income }}>{fmtYen(grossPay)}</span>
+            </div>
+          </Accordion>
+        </Card>
+
+        {/* 控除セクション */}
+        <Card>
+          <Accordion title="【控除】" defaultOpen={false}>
+            <AmountInput label="健康保険料" value={form.deductions.healthInsurance} onChange={setD("healthInsurance")} />
+            <AmountInput label="介護保険料" value={form.deductions.nursingInsurance} onChange={setD("nursingInsurance")} />
+            <AmountInput label="厚生年金保険料" value={form.deductions.pension} onChange={setD("pension")} />
+            <AmountInput label="雇用保険料" value={form.deductions.employmentInsurance} onChange={setD("employmentInsurance")} />
+            <AmountInput label="所得税" value={form.deductions.incomeTax} onChange={setD("incomeTax")} />
+            <AmountInput label="住民税" value={form.deductions.residentTax} onChange={setD("residentTax")} />
+            <AmountInput label="その他控除" value={form.deductions.other} onChange={setD("other")} />
+            <Divider />
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>控除合計</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: colors.expense }}>-{fmtYen(totalDed)}</span>
+            </div>
+          </Accordion>
+        </Card>
+
+        {/* 手取り表示 */}
+        <Card style={{ backgroundColor: "#F0FFF4", border: `2px solid ${colors.income}` }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: colors.textLight, marginBottom: 4 }}>差引支給額（手取り）</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: colors.income }}>{fmtYen(netPay)}</div>
+          </div>
+        </Card>
+
+        {/* ボーナス・副収入 */}
+        <Card>
+          <SectionHeader title="ボーナス・副収入" />
+          <AmountInput label="ボーナス" value={form.bonus} onChange={(v) => setForm((f) => ({ ...f, bonus: v }))} />
+          <AmountInput label="副収入" value={form.sideIncome} onChange={(v) => setForm((f) => ({ ...f, sideIncome: v }))} />
+          <TextInput label="メモ" value={form.memo} onChange={(v) => setForm((f) => ({ ...f, memo: v }))} placeholder="メモ（任意）" />
+        </Card>
+
+        {/* 可処分所得カード */}
+        <Card style={{ backgroundColor: "#EBF5FB" }}>
+          <SectionHeader title="可処分所得" color={colors.saving} />
+          <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 8 }}>
+            手取り収入 − 固定費（家賃・ローン・保険等）= 自由に使えるお金
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>手取り合計</span>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>{fmtYen(totalIncome)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>固定費</span>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>-{fmtYen(fixedExpenses)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>ローン返済</span>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>-{fmtYen(loanPayments)}</span>
+          </div>
+          <Divider />
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: colors.saving }}>今月の可処分所得</span>
+            <span style={{ fontSize: 22, fontWeight: 800, color: disposable >= 0 ? colors.saving : colors.expense }}>
+              {fmtYen(disposable)}
+            </span>
+          </div>
+        </Card>
+
+        <PrimaryButton onClick={save} color={saved ? colors.neutral : colors.income}>
+          {saved ? "✅ 保存しました" : "保存する"}
+        </PrimaryButton>
+
+        {/* 収入推移グラフ */}
+        <Card style={{ marginTop: 16 }}>
+          <SectionHeader title="手取り推移（12ヶ月）" />
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#EEE" />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${Math.round(v / 10000)}万`} />
+              <Tooltip formatter={(v) => fmtYen(v)} />
+              <Area type="monotone" dataKey="手取り" stroke={colors.income} fill="#D5F5E3" strokeWidth={2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
     </div>
   );
 }
