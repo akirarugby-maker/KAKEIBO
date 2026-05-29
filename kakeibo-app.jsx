@@ -4,7 +4,7 @@
 ========================================
 フェーズ1:  基盤・データ構造・状態管理    [✅]
 フェーズ2:  共通コンポーネント・スマホUI  [✅]
-フェーズ3:  ホーム（ダッシュボード）      [ ]
+フェーズ3:  ホーム（ダッシュボード）      [✅]
 フェーズ4:  ①収入タブ                   [ ]
 フェーズ5:  ②支出タブ 前半（入力・一覧） [ ]
 フェーズ6:  ②支出タブ 後半（分析・予算） [ ]
@@ -615,11 +615,189 @@ function PageTitle({ title, subtitle }) {
 
 // ===== フェーズ1終了 - 後フェーズで実装するプレースホルダー =====
 
+// ===== フェーズ3: ホーム（ダッシュボード）=====
+
 function HomeTab({ data, updateData }) {
+  const today = new Date();
+  const ym = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+
+  // 今月の給与データ
+  const thisSalary = data.salaries.find((s) => s.month === ym);
+  const grossIncome = thisSalary
+    ? thisSalary.basicSalary + Object.values(thisSalary.allowances || {}).reduce((a, b) => a + b, 0)
+    : 0;
+  const totalDeductions = thisSalary
+    ? Object.values(thisSalary.deductions || {}).reduce((a, b) => a + b, 0)
+    : 0;
+  const netIncome = grossIncome - totalDeductions + (thisSalary?.bonus || 0) + (thisSalary?.sideIncome || 0);
+
+  // 今月の支出
+  const monthExpenses = data.expenses.filter((e) => e.date?.startsWith(ym));
+  const totalExpense = monthExpenses.reduce((a, e) => a + e.amount, 0);
+  const balance = netIncome - totalExpense;
+
+  // 資産・負債
+  const bankTotal = (data.assets.bankAccounts || []).reduce((a, b) => a + b.balance, 0);
+  const investTotal = (data.assets.investments || []).reduce((a, inv) => a + inv.currentPrice * inv.quantity, 0);
+  const idecoVal = data.assets.ideco?.currentValue || 0;
+  const annuityVal = (data.assets.variableAnnuities || []).reduce((a, v) => a + v.currentValue, 0);
+  const totalAsset = bankTotal + investTotal + idecoVal + annuityVal;
+
+  const totalLoan = (data.loans || []).reduce((a, l) => a + l.remainingBalance, 0);
+  const netWorth = totalAsset - totalLoan;
+
+  // 今月の貯蓄目標
+  const goalSaving = data.settings.monthlyGoalSaving || 50000;
+  const actualSaving = Math.max(0, balance);
+
+  // 支出カテゴリ別集計（円グラフ用）
+  const catTotals = {};
+  monthExpenses.forEach((e) => {
+    catTotals[e.category] = (catTotals[e.category] || 0) + e.amount;
+  });
+  const pieData = Object.entries(catTotals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([name, value]) => ({ name, value, color: expenseCategories[name]?.color || colors.neutral }));
+
+  // 直近5件の支出
+  const recent5 = [...data.expenses]
+    .sort((a, b) => b.date > a.date ? 1 : -1)
+    .slice(0, 5);
+
+  // ローン残高一覧
+  const loanTypeIcon = { car: "🚗", housing: "🏠", scholarship: "🎓", other: "💰" };
+
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ color: colors.text, margin: 0 }}>🏠 ホーム</h2>
-      <p style={{ color: colors.textLight }}>フェーズ3で実装予定</p>
+    <div>
+      <PageTitle title="🏠 ホーム" subtitle={`${today.getFullYear()}年${today.getMonth() + 1}月`} />
+
+      {/* 1. 今月の収支カード */}
+      <div style={{ padding: "0 16px" }}>
+        <Card style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "#fff" }}>
+          <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
+            {today.getFullYear()}年{today.getMonth() + 1}月
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 14, opacity: 0.9 }}>手取り</span>
+            <span style={{ fontSize: 22, fontWeight: 700 }}>{fmtYen(netIncome)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 14, opacity: 0.9 }}>支出</span>
+            <span style={{ fontSize: 22, fontWeight: 700 }}>-{fmtYen(totalExpense)}</span>
+          </div>
+          <div style={{ height: 1, backgroundColor: "rgba(255,255,255,0.3)", marginBottom: 8 }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>収支</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: balance >= 0 ? "#A8FFB0" : "#FFB0B0" }}>
+              {balance >= 0 ? "+" : ""}{fmtYen(balance)}
+            </span>
+          </div>
+        </Card>
+
+        {/* 2. 資産・負債サマリー */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, overflowX: "auto", paddingBottom: 4 }}>
+          {[
+            { label: "総資産", value: totalAsset, color: colors.asset },
+            { label: "ローン残高", value: totalLoan, color: colors.loan },
+            { label: "純資産", value: netWorth, color: netWorth >= 0 ? colors.income : colors.expense },
+          ].map((item) => (
+            <div key={item.label} style={{
+              flex: "0 0 auto", minWidth: 110,
+              backgroundColor: colors.card, borderRadius: 12, padding: 12,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)", textAlign: "center",
+            }}>
+              <div style={{ fontSize: 11, color: colors.textLight, marginBottom: 4 }}>{item.label}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: item.color }}>
+                {item.value < 0 ? "▲" : ""}{fmtYen(Math.abs(item.value))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 3. 支出カテゴリ円グラフ */}
+        {pieData.length > 0 ? (
+          <Card>
+            <SectionHeader title="今月の支出内訳" />
+            <ResponsiveContainer width="100%" height={180}>
+              <RechartsPie>
+                <Pie data={pieData} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`} labelLine={false} fontSize={10}>
+                  {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <Tooltip formatter={(v) => fmtYen(v)} />
+              </RechartsPie>
+            </ResponsiveContainer>
+          </Card>
+        ) : (
+          <Card>
+            <SectionHeader title="今月の支出内訳" />
+            <EmptyState message="今月の支出データがありません" />
+          </Card>
+        )}
+
+        {/* 4. 貯蓄目標達成率 */}
+        <Card>
+          <SectionHeader title="今月の貯蓄目標" />
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>目標: {fmtYen(goalSaving)}</span>
+            <span style={{ fontSize: 13, color: colors.saving, fontWeight: 700 }}>{fmtYen(actualSaving)}</span>
+          </div>
+          <ProgressBar value={actualSaving} max={goalSaving} color={colors.saving} />
+        </Card>
+
+        {/* 5. ローン返済状況 */}
+        {data.loans.length > 0 && (
+          <Card>
+            <SectionHeader title="ローン返済状況" />
+            {data.loans.map((loan) => {
+              const monthsLeft = loan.monthlyPayment > 0
+                ? Math.ceil(loan.remainingBalance / loan.monthlyPayment)
+                : 0;
+              return (
+                <div key={loan.id} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  paddingBottom: 8, marginBottom: 8, borderBottom: "1px solid #F0F0F0",
+                }}>
+                  <div>
+                    <span style={{ marginRight: 6 }}>{loanTypeIcon[loan.type] || "💰"}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>{loan.name}</span>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: colors.loan }}>{fmtYen(loan.remainingBalance)}</div>
+                    <div style={{ fontSize: 11, color: colors.textLight }}>あと{monthsLeft}回</div>
+                  </div>
+                </div>
+              );
+            })}
+          </Card>
+        )}
+
+        {/* 6. 直近の支出履歴 */}
+        <Card>
+          <SectionHeader title="最近の支出" />
+          {recent5.length > 0 ? (
+            recent5.map((e) => (
+              <div key={e.id} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                paddingBottom: 8, marginBottom: 8, borderBottom: "1px solid #F8F8F8",
+              }}>
+                <div>
+                  <div style={{
+                    display: "inline-block", width: 8, height: 8, borderRadius: "50%",
+                    backgroundColor: expenseCategories[e.category]?.color || colors.neutral,
+                    marginRight: 8,
+                  }} />
+                  <span style={{ fontSize: 13, color: colors.text }}>{e.category}</span>
+                  <span style={{ fontSize: 11, color: colors.textLight, marginLeft: 6 }}>{e.date}</span>
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: colors.expense }}>-{fmtYen(e.amount)}</span>
+              </div>
+            ))
+          ) : (
+            <EmptyState message="支出履歴がありません" />
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
