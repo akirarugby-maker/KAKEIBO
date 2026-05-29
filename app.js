@@ -5989,3 +5989,7 @@ function DataManagementPanel(_ref48) {
     }
   }, "\uD83D\uDDD1 \u5168\u30C7\u30FC\u30BF\u3092\u524A\u9664")));
 }
+// マウント
+var container = document.getElementById('root');
+var root = ReactDOM.createRoot(container);
+root.render(React.createElement(KakeiboApp, null));
