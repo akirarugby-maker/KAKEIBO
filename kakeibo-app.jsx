@@ -160,12 +160,12 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 // ===== タブ定義 =====
 const TABS = [
-  { id: "home",       label: "ホーム",   icon: Home },
-  { id: "income",     label: "収入",     icon: DollarSign },
-  { id: "expense",    label: "支出",     icon: CreditCard },
-  { id: "loan",       label: "ローン",   icon: Calculator },
-  { id: "asset",      label: "資産",     icon: PiggyBank },
-  { id: "simulation", label: "シミュ",   icon: TrendingUp },
+  { id: "home",       label: "ホーム",  emoji: "🏠", color: "#5B5EA6" },
+  { id: "income",     label: "収入",    emoji: "💴", color: "#27AE60" },
+  { id: "expense",    label: "支出",    emoji: "🛒", color: "#E74C3C" },
+  { id: "loan",       label: "ローン",  emoji: "🏦", color: "#E67E22" },
+  { id: "asset",      label: "資産",    emoji: "📈", color: "#8E44AD" },
+  { id: "simulation", label: "シミュ",  emoji: "🔮", color: "#2980B9" },
 ];
 
 // ===== メインアプリ =====
@@ -232,15 +232,14 @@ function BottomNav({ activeTab, setActiveTab }) {
       transform: "translateX(-50%)",
       width: "100%",
       maxWidth: 430,
-      height: 60,
-      backgroundColor: colors.card,
-      borderTop: "1px solid #E8E8E8",
+      height: 68,
+      backgroundColor: "#FFFFFF",
+      borderTop: "1px solid #EBEBEB",
       display: "flex",
       zIndex: 1000,
-      boxShadow: "0 -2px 8px rgba(0,0,0,0.08)",
+      boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
     }}>
       {TABS.map((tab) => {
-        const Icon = tab.icon;
         const active = activeTab === tab.id;
         return (
           <button
@@ -252,19 +251,55 @@ function BottomNav({ activeTab, setActiveTab }) {
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: 2,
+              gap: 3,
               border: "none",
               background: "none",
               cursor: "pointer",
-              color: active ? colors.saving : colors.textLight,
-              fontSize: 10,
-              fontWeight: active ? 700 : 400,
-              minHeight: 44,
-              transition: "color 0.2s",
+              padding: "6px 0 4px",
+              position: "relative",
             }}
           >
-            <Icon size={20} />
-            <span>{tab.label}</span>
+            {/* アクティブ時の背景ピル */}
+            {active && (
+              <div style={{
+                position: "absolute",
+                top: 6,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 44,
+                height: 32,
+                backgroundColor: tab.color + "22",
+                borderRadius: 12,
+              }} />
+            )}
+            {/* 上部アクセントライン */}
+            {active && (
+              <div style={{
+                position: "absolute",
+                top: 0,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 28,
+                height: 3,
+                backgroundColor: tab.color,
+                borderRadius: "0 0 4px 4px",
+              }} />
+            )}
+            <span style={{
+              fontSize: active ? 24 : 21,
+              lineHeight: 1,
+              filter: active ? "none" : "grayscale(30%)",
+              transition: "font-size 0.15s",
+              zIndex: 1,
+            }}>{tab.emoji}</span>
+            <span style={{
+              fontSize: 10,
+              fontWeight: active ? 800 : 500,
+              color: active ? tab.color : "#AAA",
+              letterSpacing: active ? "0.02em" : 0,
+              transition: "color 0.15s",
+              zIndex: 1,
+            }}>{tab.label}</span>
           </button>
         );
       })}

@@ -231,27 +231,33 @@ var todayStr = function todayStr() {
 var TABS = [{
   id: "home",
   label: "ホーム",
-  icon: Home
+  emoji: "🏠",
+  color: "#5B5EA6"
 }, {
   id: "income",
   label: "収入",
-  icon: DollarSign
+  emoji: "💴",
+  color: "#27AE60"
 }, {
   id: "expense",
   label: "支出",
-  icon: CreditCard
+  emoji: "🛒",
+  color: "#E74C3C"
 }, {
   id: "loan",
   label: "ローン",
-  icon: Calculator
+  emoji: "🏦",
+  color: "#E67E22"
 }, {
   id: "asset",
   label: "資産",
-  icon: PiggyBank
+  emoji: "📈",
+  color: "#8E44AD"
 }, {
   id: "simulation",
   label: "シミュ",
-  icon: TrendingUp
+  emoji: "🔮",
+  color: "#2980B9"
 }];
 
 // ===== メインアプリ =====
@@ -350,15 +356,14 @@ function BottomNav(_ref) {
       transform: "translateX(-50%)",
       width: "100%",
       maxWidth: 430,
-      height: 60,
-      backgroundColor: colors.card,
-      borderTop: "1px solid #E8E8E8",
+      height: 68,
+      backgroundColor: "#FFFFFF",
+      borderTop: "1px solid #EBEBEB",
       display: "flex",
       zIndex: 1000,
-      boxShadow: "0 -2px 8px rgba(0,0,0,0.08)"
+      boxShadow: "0 -4px 16px rgba(0,0,0,0.10)"
     }
   }, TABS.map(function (tab) {
-    var Icon = tab.icon;
     var active = activeTab === tab.id;
     return /*#__PURE__*/React.createElement("button", {
       key: tab.id,
@@ -371,19 +376,53 @@ function BottomNav(_ref) {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 2,
+        gap: 3,
         border: "none",
         background: "none",
         cursor: "pointer",
-        color: active ? colors.saving : colors.textLight,
-        fontSize: 10,
-        fontWeight: active ? 700 : 400,
-        minHeight: 44,
-        transition: "color 0.2s"
+        padding: "6px 0 4px",
+        position: "relative"
       }
-    }, /*#__PURE__*/React.createElement(Icon, {
-      size: 20
-    }), /*#__PURE__*/React.createElement("span", null, tab.label));
+    }, active && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        top: 6,
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: 44,
+        height: 32,
+        backgroundColor: tab.color + "22",
+        borderRadius: 12
+      }
+    }), active && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        top: 0,
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: 28,
+        height: 3,
+        backgroundColor: tab.color,
+        borderRadius: "0 0 4px 4px"
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: active ? 24 : 21,
+        lineHeight: 1,
+        filter: active ? "none" : "grayscale(30%)",
+        transition: "font-size 0.15s",
+        zIndex: 1
+      }
+    }, tab.emoji), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        fontWeight: active ? 800 : 500,
+        color: active ? tab.color : "#AAA",
+        letterSpacing: active ? "0.02em" : 0,
+        transition: "color 0.15s",
+        zIndex: 1
+      }
+    }, tab.label));
   }));
 }
 
