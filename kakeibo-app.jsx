@@ -181,6 +181,7 @@ const TABS = [
   { id: "loan",       label: "ローン",  emoji: "🏦", color: "#E67E22" },
   { id: "asset",      label: "資産",    emoji: "📈", color: "#8E44AD" },
   { id: "simulation", label: "シミュ",  emoji: "🔮", color: "#2980B9" },
+  { id: "financial",  label: "財務諸表", emoji: "📊", color: "#1565C0" },
 ];
 
 // ===== メインアプリ =====
@@ -213,6 +214,7 @@ export default function KakeiboApp() {
       case "loan":       return <LoanTab       data={data} updateData={updateData} />;
       case "asset":      return <AssetTab      data={data} updateData={updateData} />;
       case "simulation": return <SimulationTab data={data} updateData={updateData} />;
+      case "financial":  return <FinancialTab  data={data} />;
       default:           return null;
     }
   };
@@ -3466,5 +3468,395 @@ function DataManagementPanel({ data, updateData }) {
         </OutlineButton>
       </div>
     </Card>
+  );
+}
+
+// ===== 財務諸表タブ =====
+function FinancialTab({ data }) {
+  const [month, setMonth] = useState(currentYM());
+  const [subtab, setSubtab] = useState("bs");
+
+  // ---- 共通計算ヘルパー ----
+  const getSalary = (ym) => data.salaries.find((s) => s.month === ym);
+  const getMonthIncome = (ym) => {
+    const s = getSalary(ym);
+    if (!s) return 0;
+    const gross = s.basicSalary + Object.values(s.allowances || {}).reduce((a, b) => a + b, 0);
+    const ded   = Object.values(s.deductions || {}).reduce((a, b) => a + b, 0);
+    return Math.max(0, gross - ded) + (s.bonus || 0) + (s.spouseIncome || 0) + (s.sideIncome || 0);
+  };
+  const getMonthExpense = (ym) => data.expenses.filter((e) => e.date?.startsWith(ym)).reduce((a, e) => a + e.amount, 0);
+  const isFixedCat = (cat) => EXPENSE_CATS.find((c) => c.name === cat)?.isFixed || false;
+  const getFixedExpense = (ym) => data.expenses.filter((e) => e.date?.startsWith(ym) && isFixedCat(e.category)).reduce((a, e) => a + e.amount, 0);
+  const getVarExpense = (ym) => getMonthExpense(ym) - getFixedExpense(ym);
+
+  // ---- B/S 計算 ----
+  const totalBank = (data.assets.bankAccounts || []).reduce((a, b) => a + (b.balance || 0), 0);
+  const nisaVal = (data.assets.nisa?.investments || []).reduce((a, i) => a + (i.currentValue || 0), 0);
+  const idecoVal = data.assets.ideco?.totalBalance || 0;
+  const annuityVal = (data.assets.variableAnnuities || []).reduce((a, v) => a + (v.currentValue || 0), 0);
+  const totalAsset = totalBank + nisaVal + idecoVal + annuityVal;
+  const totalLiability = data.loans.reduce((a, l) => a + (l.remainingBalance || 0), 0);
+  const netWorth = totalAsset - totalLiability;
+
+  // ---- P/L 計算（選択月）----
+  const income = getMonthIncome(month);
+  const expense = getMonthExpense(month);
+  const profit = income - expense;
+  const fixedExp = getFixedExpense(month);
+  const varExp = getVarExpense(month);
+
+  // カテゴリ別支出（P/L詳細用）
+  const catBreakdown = (() => {
+    const map = {};
+    data.expenses.filter((e) => e.date?.startsWith(month)).forEach((e) => {
+      map[e.category] = (map[e.category] || 0) + e.amount;
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  })();
+
+  // ---- 損益分岐点（直近12ヶ月）----
+  const bepRows = (() => {
+    const rows = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const inc = getMonthIncome(ym);
+      const fixed = getFixedExpense(ym);
+      const variable = getVarExpense(ym);
+      const total = fixed + variable;
+      const varRate = inc > 0 ? variable / inc : 0;
+      // 損益分岐点売上高 = 固定費 / (1 - 変動費率)
+      const bep = varRate < 1 && inc > 0 ? Math.round(fixed / (1 - varRate)) : null;
+      const margin = inc > 0 ? Math.round((profit / inc) * 100) : null;
+      rows.push({ ym, label: `${d.getMonth() + 1}月`, inc, fixed, variable, total, bep, profit: inc - total });
+    }
+    return rows;
+  })();
+
+  // ---- BSダイアグラム（T字型）----
+  const BSDiagram = () => {
+    const assetItems = [
+      { label: "銀行預金",   value: totalBank,    color: "#1565C0" },
+      { label: "NISA",       value: nisaVal,       color: "#27AE60" },
+      { label: "iDeCo",      value: idecoVal,      color: "#2980B9" },
+      { label: "変額年金",   value: annuityVal,    color: "#8E44AD" },
+    ].filter((i) => i.value > 0);
+    const liabItems = data.loans.map((l) => ({
+      label: l.name || "ローン",
+      value: l.remainingBalance || 0,
+      color: "#E74C3C",
+    })).filter((i) => i.value > 0);
+
+    const maxH = 220;
+    const totalForScale = Math.max(totalAsset, totalLiability + Math.max(0, netWorth));
+
+    const barSection = (items, total, baseColor) => {
+      let offset = 0;
+      return items.map((item, idx) => {
+        const pct = totalForScale > 0 ? item.value / totalForScale : 0;
+        const h = Math.max(pct * maxH, item.value > 0 ? 18 : 0);
+        const y = offset;
+        offset += h;
+        return (
+          <div key={idx} style={{
+            height: h, backgroundColor: item.color, display: "flex", alignItems: "center",
+            justifyContent: "center", flexDirection: "column", overflow: "hidden",
+            borderBottom: "1px solid rgba(255,255,255,0.3)",
+          }}>
+            {h > 22 && <span style={{ fontSize: 10, color: "#fff", fontWeight: 700, textAlign: "center", padding: "0 4px" }}>{item.label}</span>}
+            {h > 32 && <span style={{ fontSize: 9, color: "rgba(255,255,255,0.9)" }}>{fmtYen(item.value)}</span>}
+          </div>
+        );
+      });
+    };
+
+    const netH = totalForScale > 0 ? Math.max((Math.max(0, netWorth) / totalForScale) * maxH, netWorth > 0 ? 20 : 0) : 0;
+    const liabH = totalForScale > 0 ? (totalLiability / totalForScale) * maxH : 0;
+
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 2 }}>
+          {/* 資産 */}
+          <div style={{ flex: 1 }}>
+            <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: "#1565C0", marginBottom: 4, padding: "4px 0", backgroundColor: "#E3F2FD", borderRadius: "6px 6px 0 0" }}>
+              資産 {fmtYen(totalAsset)}
+            </div>
+            <div style={{ height: maxH, borderRadius: "0 0 6px 6px", overflow: "hidden", border: "1.5px solid #90CAF9", borderTop: "none" }}>
+              {barSection(assetItems, totalAsset, "#1565C0")}
+              {assetItems.length === 0 && (
+                <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: 12 }}>データなし</div>
+              )}
+            </div>
+          </div>
+          {/* 負債＋純資産 */}
+          <div style={{ flex: 1 }}>
+            <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: "#C62828", marginBottom: 4, padding: "4px 0", backgroundColor: "#FFEBEE", borderRadius: "6px 6px 0 0" }}>
+              負債＋純資産 {fmtYen(totalLiability + Math.max(0, netWorth))}
+            </div>
+            <div style={{ height: maxH, borderRadius: "0 0 6px 6px", overflow: "hidden", border: "1.5px solid #EF9A9A", borderTop: "none", display: "flex", flexDirection: "column" }}>
+              {barSection(liabItems, totalLiability, "#E74C3C")}
+              {netWorth > 0 && (
+                <div style={{
+                  flex: 1, minHeight: netH, backgroundColor: "#4CAF50",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column",
+                }}>
+                  <span style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>純資産</span>
+                  <span style={{ fontSize: 9, color: "rgba(255,255,255,0.9)" }}>{fmtYen(netWorth)}</span>
+                </div>
+              )}
+              {liabItems.length === 0 && netWorth <= 0 && (
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: 12 }}>負債なし</div>
+              )}
+            </div>
+          </div>
+        </div>
+        {/* 凡例 */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+          {[
+            { label: "銀行預金", color: "#1565C0" },
+            { label: "NISA", color: "#27AE60" },
+            { label: "iDeCo", color: "#2980B9" },
+            { label: "変額年金", color: "#8E44AD" },
+            { label: "ローン（負債）", color: "#E74C3C" },
+            { label: "純資産", color: "#4CAF50" },
+          ].map((l) => (
+            <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: l.color }} />
+              <span style={{ fontSize: 11, color: colors.textLight }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ---- P/Lウォーターフォール図式 ----
+  const PLDiagram = () => {
+    const maxVal = Math.max(income, expense, 1);
+    const incomeH  = Math.round((income  / maxVal) * 180);
+    const fixedH   = Math.round((fixedExp  / maxVal) * 180);
+    const varH     = Math.round((varExp    / maxVal) * 180);
+    const profitH  = Math.max(Math.round((Math.abs(profit) / maxVal) * 180), profit !== 0 ? 20 : 4);
+    const isProfit = profit >= 0;
+
+    const Bar = ({ height, color, label, value, striped }) => (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
+        <div style={{ fontSize: 10, color: colors.textLight, marginBottom: 2, textAlign: "center" }}>{fmtYen(value)}</div>
+        <div style={{
+          height, width: "100%", backgroundColor: color, borderRadius: "6px 6px 0 0",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          backgroundImage: striped ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.15) 0px, rgba(255,255,255,0.15) 4px, transparent 4px, transparent 8px)" : "none",
+        }}>
+          {height > 28 && <span style={{ fontSize: 10, color: "#fff", fontWeight: 700, writingMode: "vertical-rl", textOrientation: "mixed" }}>{label}</span>}
+        </div>
+        <div style={{ height: 3, width: "100%", backgroundColor: "#DDD" }} />
+        <div style={{ fontSize: 11, fontWeight: 700, color, marginTop: 4, textAlign: "center" }}>{label}</div>
+      </div>
+    );
+
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 220 }}>
+          <Bar height={incomeH} color="#27AE60" label="収入" value={income} />
+          <div style={{ display: "flex", alignItems: "center", fontSize: 18, color: "#999", paddingBottom: 20 }}>−</div>
+          <Bar height={fixedH}  color="#E67E22" label="固定費" value={fixedExp} striped />
+          <div style={{ display: "flex", alignItems: "center", fontSize: 18, color: "#999", paddingBottom: 20 }}>−</div>
+          <Bar height={varH}    color="#E74C3C" label="変動費" value={varExp} striped />
+          <div style={{ display: "flex", alignItems: "center", fontSize: 18, color: "#999", paddingBottom: 20 }}>=</div>
+          <Bar height={profitH} color={isProfit ? "#1565C0" : "#B71C1C"} label={isProfit ? "黒字" : "赤字"} value={Math.abs(profit)} />
+        </div>
+        {/* カテゴリ別費用明細 */}
+        {catBreakdown.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: colors.textLight, marginBottom: 6 }}>費用内訳</div>
+            {catBreakdown.map(([cat, amt]) => {
+              const pct = expense > 0 ? amt / expense : 0;
+              const catColor = expenseCategories[cat]?.color || colors.neutral;
+              return (
+                <div key={cat} style={{ marginBottom: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: catColor }} />
+                      <span style={{ fontSize: 12 }}>{cat}</span>
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{fmtYen(amt)}</span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 3, backgroundColor: "#EEE", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct * 100}%`, backgroundColor: catColor, borderRadius: 3 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ---- 損益分岐点表 ----
+  const BEPTable = () => (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+        <thead>
+          <tr style={{ backgroundColor: "#E3F2FD" }}>
+            {["月", "収入", "固定費", "変動費", "収支", "損益分岐点"].map((h) => (
+              <th key={h} style={{ padding: "6px 4px", textAlign: "right", fontWeight: 700, color: "#1565C0", borderBottom: "2px solid #90CAF9", whiteSpace: "nowrap" }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {bepRows.map((row, i) => {
+            const isCurrentMonth = row.ym === month;
+            const isBlack = row.profit >= 0;
+            return (
+              <tr key={row.ym} style={{ backgroundColor: isCurrentMonth ? "#FFF9C4" : i % 2 === 0 ? "#FAFAFA" : "#FFF" }}>
+                <td style={{ padding: "5px 4px", fontWeight: isCurrentMonth ? 700 : 400, whiteSpace: "nowrap" }}>{row.label}</td>
+                <td style={{ padding: "5px 4px", textAlign: "right", color: "#27AE60", fontWeight: 600 }}>{row.inc > 0 ? fmtYen(row.inc) : "-"}</td>
+                <td style={{ padding: "5px 4px", textAlign: "right", color: "#E67E22" }}>{row.fixed > 0 ? fmtYen(row.fixed) : "-"}</td>
+                <td style={{ padding: "5px 4px", textAlign: "right", color: "#E74C3C" }}>{row.variable > 0 ? fmtYen(row.variable) : "-"}</td>
+                <td style={{ padding: "5px 4px", textAlign: "right", color: isBlack ? "#1565C0" : "#B71C1C", fontWeight: 700 }}>
+                  {row.inc > 0 ? (isBlack ? "+" : "") + fmtYen(row.profit) : "-"}
+                </td>
+                <td style={{ padding: "5px 4px", textAlign: "right", color: "#555" }}>
+                  {row.bep !== null ? fmtYen(row.bep) : "-"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div style={{ fontSize: 10, color: colors.textLight, marginTop: 6 }}>
+        ※ 損益分岐点 ＝ 固定費 ÷（1 − 変動費率）　黄色行が選択中の月
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ padding: "8px 16px 4px", textAlign: "center" }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: "#1565C0" }}>📊 財務諸表</div>
+      </div>
+
+      {/* サブタブ */}
+      <div style={{ display: "flex", padding: "4px 16px 8px", gap: 6 }}>
+        {[
+          { id: "bs", label: "B/S 貸借対照表" },
+          { id: "pl", label: "P/L 損益計算書" },
+          { id: "cf", label: "損益分岐点" },
+        ].map((t) => (
+          <button key={t.id} onClick={() => setSubtab(t.id)} style={{
+            flex: 1, padding: "7px 4px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700,
+            backgroundColor: subtab === t.id ? "#1565C0" : "#EEE",
+            color: subtab === t.id ? "#fff" : colors.textLight,
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* 月選択（P/Lと損益分岐点で使用） */}
+      {subtab !== "bs" && (
+        <div style={{ padding: "0 16px 8px" }}>
+          <MonthNavigator month={month} setMonth={setMonth} />
+        </div>
+      )}
+
+      {subtab === "bs" && (
+        <>
+          <Card>
+            <SectionHeader title="貸借対照表（B/S）" />
+            <div style={{ fontSize: 11, color: colors.textLight, marginBottom: 10 }}>
+              現時点の資産・負債・純資産の構成
+            </div>
+            <BSDiagram />
+            <Divider />
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>総資産</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "#1565C0" }}>{fmtYen(totalAsset)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>総負債</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "#E74C3C" }}>-{fmtYen(totalLiability)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, paddingTop: 8, borderTop: "2px solid #EEE" }}>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>純資産</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: netWorth >= 0 ? "#4CAF50" : "#B71C1C" }}>{fmtYen(netWorth)}</span>
+            </div>
+          </Card>
+          <Card>
+            <SectionHeader title="資産の部 明細" />
+            {[
+              { label: "銀行預金",  value: totalBank,    color: "#1565C0" },
+              { label: "NISA",      value: nisaVal,       color: "#27AE60" },
+              { label: "iDeCo",     value: idecoVal,      color: "#2980B9" },
+              { label: "変額年金",  value: annuityVal,    color: "#8E44AD" },
+            ].map((item) => (
+              <div key={item.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: item.color }} />
+                  <span style={{ fontSize: 13 }}>{item.label}</span>
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 600, color: item.color }}>{fmtYen(item.value)}</span>
+              </div>
+            ))}
+          </Card>
+          {data.loans.length > 0 && (
+            <Card>
+              <SectionHeader title="負債の部 明細" />
+              {data.loans.map((l) => (
+                <div key={l.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 13 }}>{l.name || "ローン"}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#E74C3C" }}>-{fmtYen(l.remainingBalance || 0)}</span>
+                </div>
+              ))}
+            </Card>
+          )}
+        </>
+      )}
+
+      {subtab === "pl" && (
+        <>
+          <Card>
+            <SectionHeader title={`損益計算書（P/L）— ${month.replace("-","年")}月`} />
+            <div style={{ fontSize: 11, color: colors.textLight, marginBottom: 10 }}>
+              収入から費用を差し引いた当月の損益
+            </div>
+            {income === 0 && expense === 0
+              ? <EmptyState message="この月のデータがありません" />
+              : <PLDiagram />
+            }
+            <Divider />
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>収入合計</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#27AE60" }}>{fmtYen(income)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>固定費</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#E67E22" }}>-{fmtYen(fixedExp)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>変動費</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#E74C3C" }}>-{fmtYen(varExp)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingTop: 8, borderTop: "2px solid #EEE" }}>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>当月収支</span>
+              <span style={{ fontSize: 22, fontWeight: 800, color: profit >= 0 ? "#1565C0" : "#B71C1C" }}>
+                {profit >= 0 ? "+" : ""}{fmtYen(profit)}
+              </span>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {subtab === "cf" && (
+        <Card>
+          <SectionHeader title="損益分岐点分析（直近12ヶ月）" />
+          <div style={{ fontSize: 11, color: colors.textLight, marginBottom: 10 }}>
+            損益分岐点：最低限必要な収入額。これを上回ると黒字。
+          </div>
+          <BEPTable />
+        </Card>
+      )}
+    </div>
   );
 }

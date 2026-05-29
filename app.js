@@ -305,6 +305,11 @@ var TABS = [{
   label: "シミュ",
   emoji: "🔮",
   color: "#2980B9"
+}, {
+  id: "financial",
+  label: "財務諸表",
+  emoji: "📊",
+  color: "#1565C0"
 }];
 
 // ===== メインアプリ =====
@@ -367,6 +372,10 @@ function KakeiboApp() {
         return /*#__PURE__*/React.createElement(SimulationTab, {
           data: data,
           updateData: updateData
+        });
+      case "financial":
+        return /*#__PURE__*/React.createElement(FinancialTab, {
+          data: data
         });
       default:
         return null;
@@ -7254,6 +7263,881 @@ function DataManagementPanel(_ref51) {
       width: "100%"
     }
   }, "\uD83D\uDDD1 \u5168\u30C7\u30FC\u30BF\u3092\u524A\u9664")));
+}
+
+// ===== 財務諸表タブ =====
+function FinancialTab(_ref52) {
+  var _data$assets$nisa8, _data$assets$ideco8;
+  var data = _ref52.data;
+  var _useState115 = useState(currentYM()),
+    _useState116 = _slicedToArray(_useState115, 2),
+    month = _useState116[0],
+    setMonth = _useState116[1];
+  var _useState117 = useState("bs"),
+    _useState118 = _slicedToArray(_useState117, 2),
+    subtab = _useState118[0],
+    setSubtab = _useState118[1];
+
+  // ---- 共通計算ヘルパー ----
+  var getSalary = function getSalary(ym) {
+    return data.salaries.find(function (s) {
+      return s.month === ym;
+    });
+  };
+  var getMonthIncome = function getMonthIncome(ym) {
+    var s = getSalary(ym);
+    if (!s) return 0;
+    var gross = s.basicSalary + Object.values(s.allowances || {}).reduce(function (a, b) {
+      return a + b;
+    }, 0);
+    var ded = Object.values(s.deductions || {}).reduce(function (a, b) {
+      return a + b;
+    }, 0);
+    return Math.max(0, gross - ded) + (s.bonus || 0) + (s.spouseIncome || 0) + (s.sideIncome || 0);
+  };
+  var getMonthExpense = function getMonthExpense(ym) {
+    return data.expenses.filter(function (e) {
+      var _e$date8;
+      return (_e$date8 = e.date) === null || _e$date8 === void 0 ? void 0 : _e$date8.startsWith(ym);
+    }).reduce(function (a, e) {
+      return a + e.amount;
+    }, 0);
+  };
+  var isFixedCat = function isFixedCat(cat) {
+    var _EXPENSE_CATS$find3;
+    return ((_EXPENSE_CATS$find3 = EXPENSE_CATS.find(function (c) {
+      return c.name === cat;
+    })) === null || _EXPENSE_CATS$find3 === void 0 ? void 0 : _EXPENSE_CATS$find3.isFixed) || false;
+  };
+  var getFixedExpense = function getFixedExpense(ym) {
+    return data.expenses.filter(function (e) {
+      var _e$date9;
+      return ((_e$date9 = e.date) === null || _e$date9 === void 0 ? void 0 : _e$date9.startsWith(ym)) && isFixedCat(e.category);
+    }).reduce(function (a, e) {
+      return a + e.amount;
+    }, 0);
+  };
+  var getVarExpense = function getVarExpense(ym) {
+    return getMonthExpense(ym) - getFixedExpense(ym);
+  };
+
+  // ---- B/S 計算 ----
+  var totalBank = (data.assets.bankAccounts || []).reduce(function (a, b) {
+    return a + (b.balance || 0);
+  }, 0);
+  var nisaVal = (((_data$assets$nisa8 = data.assets.nisa) === null || _data$assets$nisa8 === void 0 ? void 0 : _data$assets$nisa8.investments) || []).reduce(function (a, i) {
+    return a + (i.currentValue || 0);
+  }, 0);
+  var idecoVal = ((_data$assets$ideco8 = data.assets.ideco) === null || _data$assets$ideco8 === void 0 ? void 0 : _data$assets$ideco8.totalBalance) || 0;
+  var annuityVal = (data.assets.variableAnnuities || []).reduce(function (a, v) {
+    return a + (v.currentValue || 0);
+  }, 0);
+  var totalAsset = totalBank + nisaVal + idecoVal + annuityVal;
+  var totalLiability = data.loans.reduce(function (a, l) {
+    return a + (l.remainingBalance || 0);
+  }, 0);
+  var netWorth = totalAsset - totalLiability;
+
+  // ---- P/L 計算（選択月）----
+  var income = getMonthIncome(month);
+  var expense = getMonthExpense(month);
+  var profit = income - expense;
+  var fixedExp = getFixedExpense(month);
+  var varExp = getVarExpense(month);
+
+  // カテゴリ別支出（P/L詳細用）
+  var catBreakdown = function () {
+    var map = {};
+    data.expenses.filter(function (e) {
+      var _e$date0;
+      return (_e$date0 = e.date) === null || _e$date0 === void 0 ? void 0 : _e$date0.startsWith(month);
+    }).forEach(function (e) {
+      map[e.category] = (map[e.category] || 0) + e.amount;
+    });
+    return Object.entries(map).sort(function (a, b) {
+      return b[1] - a[1];
+    });
+  }();
+
+  // ---- 損益分岐点（直近12ヶ月）----
+  var bepRows = function () {
+    var rows = [];
+    var now = new Date();
+    for (var i = 11; i >= 0; i--) {
+      var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      var ym = "".concat(d.getFullYear(), "-").concat(String(d.getMonth() + 1).padStart(2, "0"));
+      var inc = getMonthIncome(ym);
+      var fixed = getFixedExpense(ym);
+      var variable = getVarExpense(ym);
+      var total = fixed + variable;
+      var varRate = inc > 0 ? variable / inc : 0;
+      // 損益分岐点売上高 = 固定費 / (1 - 変動費率)
+      var bep = varRate < 1 && inc > 0 ? Math.round(fixed / (1 - varRate)) : null;
+      var margin = inc > 0 ? Math.round(profit / inc * 100) : null;
+      rows.push({
+        ym: ym,
+        label: "".concat(d.getMonth() + 1, "\u6708"),
+        inc: inc,
+        fixed: fixed,
+        variable: variable,
+        total: total,
+        bep: bep,
+        profit: inc - total
+      });
+    }
+    return rows;
+  }();
+
+  // ---- BSダイアグラム（T字型）----
+  var BSDiagram = function BSDiagram() {
+    var assetItems = [{
+      label: "銀行預金",
+      value: totalBank,
+      color: "#1565C0"
+    }, {
+      label: "NISA",
+      value: nisaVal,
+      color: "#27AE60"
+    }, {
+      label: "iDeCo",
+      value: idecoVal,
+      color: "#2980B9"
+    }, {
+      label: "変額年金",
+      value: annuityVal,
+      color: "#8E44AD"
+    }].filter(function (i) {
+      return i.value > 0;
+    });
+    var liabItems = data.loans.map(function (l) {
+      return {
+        label: l.name || "ローン",
+        value: l.remainingBalance || 0,
+        color: "#E74C3C"
+      };
+    }).filter(function (i) {
+      return i.value > 0;
+    });
+    var maxH = 220;
+    var totalForScale = Math.max(totalAsset, totalLiability + Math.max(0, netWorth));
+    var barSection = function barSection(items, total, baseColor) {
+      var offset = 0;
+      return items.map(function (item, idx) {
+        var pct = totalForScale > 0 ? item.value / totalForScale : 0;
+        var h = Math.max(pct * maxH, item.value > 0 ? 18 : 0);
+        var y = offset;
+        offset += h;
+        return /*#__PURE__*/React.createElement("div", {
+          key: idx,
+          style: {
+            height: h,
+            backgroundColor: item.color,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+            overflow: "hidden",
+            borderBottom: "1px solid rgba(255,255,255,0.3)"
+          }
+        }, h > 22 && /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 10,
+            color: "#fff",
+            fontWeight: 700,
+            textAlign: "center",
+            padding: "0 4px"
+          }
+        }, item.label), h > 32 && /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 9,
+            color: "rgba(255,255,255,0.9)"
+          }
+        }, fmtYen(item.value)));
+      });
+    };
+    var netH = totalForScale > 0 ? Math.max(Math.max(0, netWorth) / totalForScale * maxH, netWorth > 0 ? 20 : 0) : 0;
+    var liabH = totalForScale > 0 ? totalLiability / totalForScale * maxH : 0;
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 2
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "center",
+        fontSize: 12,
+        fontWeight: 700,
+        color: "#1565C0",
+        marginBottom: 4,
+        padding: "4px 0",
+        backgroundColor: "#E3F2FD",
+        borderRadius: "6px 6px 0 0"
+      }
+    }, "\u8CC7\u7523 ", fmtYen(totalAsset)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: maxH,
+        borderRadius: "0 0 6px 6px",
+        overflow: "hidden",
+        border: "1.5px solid #90CAF9",
+        borderTop: "none"
+      }
+    }, barSection(assetItems, totalAsset, "#1565C0"), assetItems.length === 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#999",
+        fontSize: 12
+      }
+    }, "\u30C7\u30FC\u30BF\u306A\u3057"))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "center",
+        fontSize: 12,
+        fontWeight: 700,
+        color: "#C62828",
+        marginBottom: 4,
+        padding: "4px 0",
+        backgroundColor: "#FFEBEE",
+        borderRadius: "6px 6px 0 0"
+      }
+    }, "\u8CA0\u50B5\uFF0B\u7D14\u8CC7\u7523 ", fmtYen(totalLiability + Math.max(0, netWorth))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: maxH,
+        borderRadius: "0 0 6px 6px",
+        overflow: "hidden",
+        border: "1.5px solid #EF9A9A",
+        borderTop: "none",
+        display: "flex",
+        flexDirection: "column"
+      }
+    }, barSection(liabItems, totalLiability, "#E74C3C"), netWorth > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minHeight: netH,
+        backgroundColor: "#4CAF50",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: "#fff",
+        fontWeight: 700
+      }
+    }, "\u7D14\u8CC7\u7523"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 9,
+        color: "rgba(255,255,255,0.9)"
+      }
+    }, fmtYen(netWorth))), liabItems.length === 0 && netWorth <= 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#999",
+        fontSize: 12
+      }
+    }, "\u8CA0\u50B5\u306A\u3057")))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6,
+        marginTop: 10
+      }
+    }, [{
+      label: "銀行預金",
+      color: "#1565C0"
+    }, {
+      label: "NISA",
+      color: "#27AE60"
+    }, {
+      label: "iDeCo",
+      color: "#2980B9"
+    }, {
+      label: "変額年金",
+      color: "#8E44AD"
+    }, {
+      label: "ローン（負債）",
+      color: "#E74C3C"
+    }, {
+      label: "純資産",
+      color: "#4CAF50"
+    }].map(function (l) {
+      return /*#__PURE__*/React.createElement("div", {
+        key: l.label,
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 4
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          width: 10,
+          height: 10,
+          borderRadius: 2,
+          backgroundColor: l.color
+        }
+      }), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          color: colors.textLight
+        }
+      }, l.label));
+    })));
+  };
+
+  // ---- P/Lウォーターフォール図式 ----
+  var PLDiagram = function PLDiagram() {
+    var maxVal = Math.max(income, expense, 1);
+    var incomeH = Math.round(income / maxVal * 180);
+    var fixedH = Math.round(fixedExp / maxVal * 180);
+    var varH = Math.round(varExp / maxVal * 180);
+    var profitH = Math.max(Math.round(Math.abs(profit) / maxVal * 180), profit !== 0 ? 20 : 4);
+    var isProfit = profit >= 0;
+    var Bar = function Bar(_ref53) {
+      var height = _ref53.height,
+        color = _ref53.color,
+        label = _ref53.label,
+        value = _ref53.value,
+        striped = _ref53.striped;
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          flex: 1
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 10,
+          color: colors.textLight,
+          marginBottom: 2,
+          textAlign: "center"
+        }
+      }, fmtYen(value)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          height: height,
+          width: "100%",
+          backgroundColor: color,
+          borderRadius: "6px 6px 0 0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundImage: striped ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.15) 0px, rgba(255,255,255,0.15) 4px, transparent 4px, transparent 8px)" : "none"
+        }
+      }, height > 28 && /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 10,
+          color: "#fff",
+          fontWeight: 700,
+          writingMode: "vertical-rl",
+          textOrientation: "mixed"
+        }
+      }, label)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          height: 3,
+          width: "100%",
+          backgroundColor: "#DDD"
+        }
+      }), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          color: color,
+          marginTop: 4,
+          textAlign: "center"
+        }
+      }, label));
+    };
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "flex-end",
+        gap: 6,
+        height: 220
+      }
+    }, /*#__PURE__*/React.createElement(Bar, {
+      height: incomeH,
+      color: "#27AE60",
+      label: "\u53CE\u5165",
+      value: income
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        fontSize: 18,
+        color: "#999",
+        paddingBottom: 20
+      }
+    }, "\u2212"), /*#__PURE__*/React.createElement(Bar, {
+      height: fixedH,
+      color: "#E67E22",
+      label: "\u56FA\u5B9A\u8CBB",
+      value: fixedExp,
+      striped: true
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        fontSize: 18,
+        color: "#999",
+        paddingBottom: 20
+      }
+    }, "\u2212"), /*#__PURE__*/React.createElement(Bar, {
+      height: varH,
+      color: "#E74C3C",
+      label: "\u5909\u52D5\u8CBB",
+      value: varExp,
+      striped: true
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        fontSize: 18,
+        color: "#999",
+        paddingBottom: 20
+      }
+    }, "="), /*#__PURE__*/React.createElement(Bar, {
+      height: profitH,
+      color: isProfit ? "#1565C0" : "#B71C1C",
+      label: isProfit ? "黒字" : "赤字",
+      value: Math.abs(profit)
+    })), catBreakdown.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: colors.textLight,
+        marginBottom: 6
+      }
+    }, "\u8CBB\u7528\u5185\u8A33"), catBreakdown.map(function (_ref54) {
+      var _expenseCategories$ca;
+      var _ref55 = _slicedToArray(_ref54, 2),
+        cat = _ref55[0],
+        amt = _ref55[1];
+      var pct = expense > 0 ? amt / expense : 0;
+      var catColor = ((_expenseCategories$ca = expenseCategories[cat]) === null || _expenseCategories$ca === void 0 ? void 0 : _expenseCategories$ca.color) || colors.neutral;
+      return /*#__PURE__*/React.createElement("div", {
+        key: cat,
+        style: {
+          marginBottom: 6
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 2
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 6
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          backgroundColor: catColor
+        }
+      }), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 12
+        }
+      }, cat)), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 12,
+          fontWeight: 600
+        }
+      }, fmtYen(amt))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          height: 5,
+          borderRadius: 3,
+          backgroundColor: "#EEE",
+          overflow: "hidden"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          height: "100%",
+          width: "".concat(pct * 100, "%"),
+          backgroundColor: catColor,
+          borderRadius: 3
+        }
+      })));
+    })));
+  };
+
+  // ---- 損益分岐点表 ----
+  var BEPTable = function BEPTable() {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        overflowX: "auto"
+      }
+    }, /*#__PURE__*/React.createElement("table", {
+      style: {
+        width: "100%",
+        borderCollapse: "collapse",
+        fontSize: 11
+      }
+    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+      style: {
+        backgroundColor: "#E3F2FD"
+      }
+    }, ["月", "収入", "固定費", "変動費", "収支", "損益分岐点"].map(function (h) {
+      return /*#__PURE__*/React.createElement("th", {
+        key: h,
+        style: {
+          padding: "6px 4px",
+          textAlign: "right",
+          fontWeight: 700,
+          color: "#1565C0",
+          borderBottom: "2px solid #90CAF9",
+          whiteSpace: "nowrap"
+        }
+      }, h);
+    }))), /*#__PURE__*/React.createElement("tbody", null, bepRows.map(function (row, i) {
+      var isCurrentMonth = row.ym === month;
+      var isBlack = row.profit >= 0;
+      return /*#__PURE__*/React.createElement("tr", {
+        key: row.ym,
+        style: {
+          backgroundColor: isCurrentMonth ? "#FFF9C4" : i % 2 === 0 ? "#FAFAFA" : "#FFF"
+        }
+      }, /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: "5px 4px",
+          fontWeight: isCurrentMonth ? 700 : 400,
+          whiteSpace: "nowrap"
+        }
+      }, row.label), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: "5px 4px",
+          textAlign: "right",
+          color: "#27AE60",
+          fontWeight: 600
+        }
+      }, row.inc > 0 ? fmtYen(row.inc) : "-"), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: "5px 4px",
+          textAlign: "right",
+          color: "#E67E22"
+        }
+      }, row.fixed > 0 ? fmtYen(row.fixed) : "-"), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: "5px 4px",
+          textAlign: "right",
+          color: "#E74C3C"
+        }
+      }, row.variable > 0 ? fmtYen(row.variable) : "-"), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: "5px 4px",
+          textAlign: "right",
+          color: isBlack ? "#1565C0" : "#B71C1C",
+          fontWeight: 700
+        }
+      }, row.inc > 0 ? (isBlack ? "+" : "") + fmtYen(row.profit) : "-"), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: "5px 4px",
+          textAlign: "right",
+          color: "#555"
+        }
+      }, row.bep !== null ? fmtYen(row.bep) : "-"));
+    }))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: colors.textLight,
+        marginTop: 6
+      }
+    }, "\u203B \u640D\u76CA\u5206\u5C90\u70B9 \uFF1D \u56FA\u5B9A\u8CBB \xF7\uFF081 \u2212 \u5909\u52D5\u8CBB\u7387\uFF09\u3000\u9EC4\u8272\u884C\u304C\u9078\u629E\u4E2D\u306E\u6708"));
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "8px 16px 4px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      fontWeight: 800,
+      color: "#1565C0"
+    }
+  }, "\uD83D\uDCCA \u8CA1\u52D9\u8AF8\u8868")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      padding: "4px 16px 8px",
+      gap: 6
+    }
+  }, [{
+    id: "bs",
+    label: "B/S 貸借対照表"
+  }, {
+    id: "pl",
+    label: "P/L 損益計算書"
+  }, {
+    id: "cf",
+    label: "損益分岐点"
+  }].map(function (t) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: t.id,
+      onClick: function onClick() {
+        return setSubtab(t.id);
+      },
+      style: {
+        flex: 1,
+        padding: "7px 4px",
+        borderRadius: 8,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 11,
+        fontWeight: 700,
+        backgroundColor: subtab === t.id ? "#1565C0" : "#EEE",
+        color: subtab === t.id ? "#fff" : colors.textLight
+      }
+    }, t.label);
+  })), subtab !== "bs" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 16px 8px"
+    }
+  }, /*#__PURE__*/React.createElement(MonthNavigator, {
+    month: month,
+    setMonth: setMonth
+  })), subtab === "bs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: "\u8CB8\u501F\u5BFE\u7167\u8868\uFF08B/S\uFF09"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: colors.textLight,
+      marginBottom: 10
+    }
+  }, "\u73FE\u6642\u70B9\u306E\u8CC7\u7523\u30FB\u8CA0\u50B5\u30FB\u7D14\u8CC7\u7523\u306E\u69CB\u6210"), /*#__PURE__*/React.createElement(BSDiagram, null), /*#__PURE__*/React.createElement(Divider, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: colors.textLight
+    }
+  }, "\u7DCF\u8CC7\u7523"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: "#1565C0"
+    }
+  }, fmtYen(totalAsset))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: colors.textLight
+    }
+  }, "\u7DCF\u8CA0\u50B5"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: "#E74C3C"
+    }
+  }, "-", fmtYen(totalLiability))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginTop: 4,
+      paddingTop: 8,
+      borderTop: "2px solid #EEE"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700
+    }
+  }, "\u7D14\u8CC7\u7523"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20,
+      fontWeight: 800,
+      color: netWorth >= 0 ? "#4CAF50" : "#B71C1C"
+    }
+  }, fmtYen(netWorth)))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: "\u8CC7\u7523\u306E\u90E8 \u660E\u7D30"
+  }), [{
+    label: "銀行預金",
+    value: totalBank,
+    color: "#1565C0"
+  }, {
+    label: "NISA",
+    value: nisaVal,
+    color: "#27AE60"
+  }, {
+    label: "iDeCo",
+    value: idecoVal,
+    color: "#2980B9"
+  }, {
+    label: "変額年金",
+    value: annuityVal,
+    color: "#8E44AD"
+  }].map(function (item) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: item.label,
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 6
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 10,
+        height: 10,
+        borderRadius: 2,
+        backgroundColor: item.color
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13
+      }
+    }, item.label)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        color: item.color
+      }
+    }, fmtYen(item.value)));
+  })), data.loans.length > 0 && /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: "\u8CA0\u50B5\u306E\u90E8 \u660E\u7D30"
+  }), data.loans.map(function (l) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: l.id,
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13
+      }
+    }, l.name || "ローン"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        color: "#E74C3C"
+      }
+    }, "-", fmtYen(l.remainingBalance || 0)));
+  }))), subtab === "pl" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: "\u640D\u76CA\u8A08\u7B97\u66F8\uFF08P/L\uFF09\u2014 ".concat(month.replace("-", "年"), "\u6708")
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: colors.textLight,
+      marginBottom: 10
+    }
+  }, "\u53CE\u5165\u304B\u3089\u8CBB\u7528\u3092\u5DEE\u3057\u5F15\u3044\u305F\u5F53\u6708\u306E\u640D\u76CA"), income === 0 && expense === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
+    message: "\u3053\u306E\u6708\u306E\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093"
+  }) : /*#__PURE__*/React.createElement(PLDiagram, null), /*#__PURE__*/React.createElement(Divider, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: colors.textLight
+    }
+  }, "\u53CE\u5165\u5408\u8A08"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: "#27AE60"
+    }
+  }, fmtYen(income))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: colors.textLight
+    }
+  }, "\u56FA\u5B9A\u8CBB"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 600,
+      color: "#E67E22"
+    }
+  }, "-", fmtYen(fixedExp))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: colors.textLight
+    }
+  }, "\u5909\u52D5\u8CBB"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 600,
+      color: "#E74C3C"
+    }
+  }, "-", fmtYen(varExp))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginTop: 6,
+      paddingTop: 8,
+      borderTop: "2px solid #EEE"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700
+    }
+  }, "\u5F53\u6708\u53CE\u652F"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 22,
+      fontWeight: 800,
+      color: profit >= 0 ? "#1565C0" : "#B71C1C"
+    }
+  }, profit >= 0 ? "+" : "", fmtYen(profit))))), subtab === "cf" && /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: "\u640D\u76CA\u5206\u5C90\u70B9\u5206\u6790\uFF08\u76F4\u8FD112\u30F6\u6708\uFF09"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: colors.textLight,
+      marginBottom: 10
+    }
+  }, "\u640D\u76CA\u5206\u5C90\u70B9\uFF1A\u6700\u4F4E\u9650\u5FC5\u8981\u306A\u53CE\u5165\u984D\u3002\u3053\u308C\u3092\u4E0A\u56DE\u308B\u3068\u9ED2\u5B57\u3002"), /*#__PURE__*/React.createElement(BEPTable, null)));
 }
 // マウント
 var container = document.getElementById('root');
