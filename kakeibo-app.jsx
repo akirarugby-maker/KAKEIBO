@@ -1163,11 +1163,11 @@ function IncomeTab({ data, updateData }) {
           <TextInput label="メモ" value={form.memo} onChange={(v) => setForm((f) => ({ ...f, memo: v }))} placeholder="メモ（任意）" />
         </Card>
 
-        {/* 可処分所得カード */}
+        {/* 余裕資金カード */}
         <Card style={{ backgroundColor: "#EBF5FB" }}>
-          <SectionHeader title="可処分所得" color={colors.saving} />
+          <SectionHeader title="毎月の余裕資金" color={colors.saving} />
           <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 8 }}>
-            手取り収入 − 固定費（家賃・ローン・保険等）= 自由に使えるお金
+            手取り収入 − 固定費 − ローン返済 = 自由に使えるお金
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
             <span style={{ fontSize: 13, color: colors.textLight }}>手取り合計</span>
@@ -1183,7 +1183,7 @@ function IncomeTab({ data, updateData }) {
           </div>
           <Divider />
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: colors.saving }}>今月の可処分所得</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: colors.saving }}>今月の余裕資金</span>
             <span style={{ fontSize: 22, fontWeight: 800, color: disposable >= 0 ? colors.saving : colors.expense }}>
               {fmtYen(disposable)}
             </span>

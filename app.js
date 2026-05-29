@@ -2033,7 +2033,7 @@ function IncomeTab(_ref21) {
       backgroundColor: "#EBF5FB"
     }
   }, /*#__PURE__*/React.createElement(SectionHeader, {
-    title: "\u53EF\u51E6\u5206\u6240\u5F97",
+    title: "\u6BCE\u6708\u306E\u4F59\u88D5\u8CC7\u91D1",
     color: colors.saving
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2041,7 +2041,7 @@ function IncomeTab(_ref21) {
       color: colors.textLight,
       marginBottom: 8
     }
-  }, "\u624B\u53D6\u308A\u53CE\u5165 \u2212 \u56FA\u5B9A\u8CBB\uFF08\u5BB6\u8CC3\u30FB\u30ED\u30FC\u30F3\u30FB\u4FDD\u967A\u7B49\uFF09= \u81EA\u7531\u306B\u4F7F\u3048\u308B\u304A\u91D1"), /*#__PURE__*/React.createElement("div", {
+  }, "\u624B\u53D6\u308A\u53CE\u5165 \u2212 \u56FA\u5B9A\u8CBB \u2212 \u30ED\u30FC\u30F3\u8FD4\u6E08 = \u81EA\u7531\u306B\u4F7F\u3048\u308B\u304A\u91D1"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -2100,7 +2100,7 @@ function IncomeTab(_ref21) {
       fontWeight: 700,
       color: colors.saving
     }
-  }, "\u4ECA\u6708\u306E\u53EF\u51E6\u5206\u6240\u5F97"), /*#__PURE__*/React.createElement("span", {
+  }, "\u4ECA\u6708\u306E\u4F59\u88D5\u8CC7\u91D1"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 22,
       fontWeight: 800,
