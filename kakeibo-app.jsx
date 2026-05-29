@@ -59,9 +59,10 @@ const initialState = {
     "交通費": 20000,
     "保険料": 30000,
     "医療費": 10000,
-    "教育費": 20000,
-    "娯楽費": 20000,
-    "日用品": 15000,
+    "勉強費": 10000,
+    "雑費": 15000,
+    "交際費": 20000,
+    "車関係": 20000,
     "被服費": 10000,
     "その他": 10000,
   },
@@ -1003,140 +1004,6 @@ function daysInMonth(ym) {
   const [y, m] = ym.split("-").map(Number);
   return new Date(y, m, 0).getDate();
 }
-
-// 日別入力ページ
-function ExpenseDayDetail({ date, data, updateData, onBack }) {
-  const [selectedCat, setSelectedCat] = useState(null);
-  const [inputVal, setInputVal] = useState(0);
-  const [saved, setSaved] = useState(false);
-
-  // その日のカテゴリ別合計
-  const dayExps = data.expenses.filter((e) => e.date === date);
-  const catTotal = (name) => dayExps.filter((e) => e.category === name).reduce((a, e) => a + e.amount, 0);
-
-  const handleCatTap = (name) => {
-    if (selectedCat === name) {
-      setSelectedCat(null);
-    } else {
-      setSelectedCat(name);
-      setInputVal(catTotal(name));
-    }
-  };
-
-  const saveAmount = () => {
-    const newAmount = Number(inputVal) || 0;
-    // 既存のその日そのカテゴリのエントリを削除し、金額>0なら新規追加
-    updateData((prev) => {
-      const filtered = prev.expenses.filter((e) => !(e.date === date && e.category === selectedCat));
-      const next = newAmount > 0
-        ? [...filtered, { id: genId(), date, category: selectedCat, amount: newAmount, memo: "" }]
-        : filtered;
-      return { ...prev, expenses: next };
-    });
-    setSelectedCat(null);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1200);
-  };
-
-  const [y, m, d] = date.split("-").map(Number);
-  const dateLabel = `${y}年${m}月${d}日`;
-
-  return (
-    <div>
-      {/* ヘッダー：戻る + 日付ナビ */}
-      <div style={{ display: "flex", alignItems: "center", padding: "4px 16px 8px", gap: 8 }}>
-        <button onClick={onBack} style={{
-          background: "none", border: "none", fontSize: 22, cursor: "pointer", color: colors.textLight, padding: "4px 0",
-        }}>←</button>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-          <button onClick={() => { onBack(); }} style={{ display: "none" }} />
-          <button onClick={() => updateDayAndKeepOpen(addDays(date, -1))}
-            style={{ background: "none", border: "1.5px solid #DDD", borderRadius: 8, padding: "6px 12px", fontSize: 18, cursor: "pointer", color: colors.text }}>‹</button>
-          <span style={{ fontSize: 16, fontWeight: 700, color: colors.text, minWidth: 140, textAlign: "center" }}>{dateLabel}</span>
-          <button onClick={() => updateDayAndKeepOpen(addDays(date, 1))}
-            style={{ background: "none", border: "1.5px solid #DDD", borderRadius: 8, padding: "6px 12px", fontSize: 18, cursor: "pointer", color: colors.text }}>›</button>
-        </div>
-        {saved && <span style={{ fontSize: 12, color: colors.income, fontWeight: 700 }}>✅ 保存</span>}
-      </div>
-
-      {/* 日合計 */}
-      <div style={{ padding: "0 16px 8px" }}>
-        <div style={{
-          backgroundColor: "#FFF5F5", border: `1.5px solid ${colors.expense}`, borderRadius: 12,
-          padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center",
-        }}>
-          <span style={{ fontSize: 13, color: colors.textLight }}>この日の合計</span>
-          <span style={{ fontSize: 20, fontWeight: 800, color: colors.expense }}>
-            -{fmtYen(dayExps.reduce((a, e) => a + e.amount, 0))}
-          </span>
-        </div>
-      </div>
-
-      {/* カテゴリ一覧 */}
-      <div style={{ padding: "0 16px" }}>
-        {EXPENSE_CATS.map((cat) => {
-          const total = catTotal(cat.name);
-          const isOpen = selectedCat === cat.name;
-          return (
-            <div key={cat.name}>
-              <div onClick={() => handleCatTap(cat.name)} style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "13px 14px", marginBottom: 2, borderRadius: 12,
-                backgroundColor: isOpen ? "#FFF5F5" : colors.card,
-                border: isOpen ? `1.5px solid ${colors.expense}` : "1.5px solid transparent",
-                cursor: "pointer", transition: "all 0.15s",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: cat.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>{cat.name}</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {total > 0 && (
-                    <span style={{ fontSize: 15, fontWeight: 700, color: colors.expense }}>-{fmtYen(total)}</span>
-                  )}
-                  <span style={{ fontSize: 18, color: colors.textLight }}>{isOpen ? "▲" : "▶"}</span>
-                </div>
-              </div>
-              {/* インライン入力 */}
-              {isOpen && (
-                <div style={{
-                  backgroundColor: "#FFF5F5", borderRadius: "0 0 12px 12px",
-                  padding: "12px 14px 14px", marginBottom: 6, marginTop: -2,
-                  border: `1.5px solid ${colors.expense}`, borderTop: "none",
-                }}>
-                  <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 8 }}>
-                    金額を入力（0で削除）
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      type="number" inputMode="numeric"
-                      value={inputVal || ""}
-                      onChange={(e) => setInputVal(parseNum(e.target.value))}
-                      placeholder="0"
-                      autoFocus
-                      style={{
-                        flex: 1, padding: "10px 12px", fontSize: 18, fontWeight: 700,
-                        border: `2px solid ${colors.expense}`, borderRadius: 10,
-                        boxSizing: "border-box", backgroundColor: "#FFF", textAlign: "right",
-                      }}
-                    />
-                    <button onClick={saveAmount} style={{
-                      padding: "10px 20px", backgroundColor: colors.expense, color: "#fff",
-                      border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
-                    }}>保存</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ダミー関数（ExpenseDayDetail内で参照するが実体は親から注入）
-function updateDayAndKeepOpen() {}
 
 // 月別支出一覧（メイン画面）
 function ExpenseMonthlyView({ data, updateData, month, setMonth, onSelectDate }) {
