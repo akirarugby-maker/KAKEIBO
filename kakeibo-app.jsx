@@ -72,8 +72,9 @@ const initialState = {
     nisa: {
       tsumitateUsed: 0,
       growthUsed: 0,
-      lifetimeUsed: 0,
+      // lifetimeUsed は tsumitateUsed + growthUsed から自動計算
       year: new Date().getFullYear(),
+      investments: [],  // NISA保有銘柄
     },
     ideco: {
       monthlyContribution: 0,
@@ -638,7 +639,7 @@ function HomeTab({ data, updateData }) {
 
   // 資産・負債
   const bankTotal = (data.assets.bankAccounts || []).reduce((a, b) => a + b.balance, 0);
-  const investTotal = (data.assets.investments || []).reduce((a, inv) => a + inv.currentPrice * inv.quantity, 0);
+  const investTotal = (data.assets.nisa?.investments || []).reduce((a, i) => a + i.currentPrice * i.quantity, 0);
   const idecoVal = data.assets.ideco?.currentValue || 0;
   const annuityVal = (data.assets.variableAnnuities || []).reduce((a, v) => a + v.currentValue, 0);
   const totalAsset = bankTotal + investTotal + idecoVal + annuityVal;
@@ -1628,7 +1629,7 @@ function LoanPrepay({ data, selectedLoan, setSelectedLoan }) {
 
 // ===== フェーズ9〜11: 資産タブ =====
 
-const ASSET_SUBTABS = ["銀行・現金", "株式・投信", "NISA", "iDeCo", "変額年金", "総資産"];
+const ASSET_SUBTABS = ["銀行・現金", "NISA", "iDeCo", "変額年金", "総資産"];
 
 function AssetTab({ data, updateData }) {
   const [subtab, setSubtab] = useState("銀行・現金");
@@ -1651,7 +1652,6 @@ function AssetTab({ data, updateData }) {
       </div>
       <div style={{ padding: "0 16px" }}>
         {subtab === "銀行・現金" && <BankTab     data={data} updateData={updateData} />}
-        {subtab === "株式・投信" && <InvestTab   data={data} updateData={updateData} />}
         {subtab === "NISA"      && <NisaTab     data={data} updateData={updateData} />}
         {subtab === "iDeCo"     && <IdecoTab    data={data} updateData={updateData} />}
         {subtab === "変額年金"  && <AnnuityTab  data={data} updateData={updateData} />}
@@ -1835,36 +1835,69 @@ function InvestTab({ data, updateData }) {
   );
 }
 
-// NISA管理
+// NISA管理（投信登録・枠管理・総資産連携）
 function NisaTab({ data, updateData }) {
   const nisa = data.assets.nisa || {};
   const year = nisa.year || new Date().getFullYear();
   const LIMITS = { tsumitate: 1200000, growth: 2400000, lifetime: 18000000 };
+  const investments = nisa.investments || [];
 
-  const update = (field) => (val) => updateData((prev) => ({
-    ...prev, assets: { ...prev.assets, nisa: { ...prev.assets.nisa, [field]: val } }
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({
+    name: "", nisaType: "つみたて", purchasePrice: 0, quantity: 0, currentPrice: 0, memo: "",
+  });
+
+  // 枠使用額：登録銘柄の取得額合計から自動計算
+  const tsumitateUsed = investments
+    .filter((i) => i.nisaType === "つみたて")
+    .reduce((a, i) => a + i.purchasePrice * i.quantity, 0);
+  const growthUsed = investments
+    .filter((i) => i.nisaType === "成長")
+    .reduce((a, i) => a + i.purchasePrice * i.quantity, 0);
+  const lifetimeUsed = tsumitateUsed + growthUsed;
+
+  // 評価額合計
+  const totalValue = investments.reduce((a, i) => a + i.currentPrice * i.quantity, 0);
+  const totalCost  = investments.reduce((a, i) => a + i.purchasePrice * i.quantity, 0);
+  const totalPnl   = totalValue - totalCost;
+
+  const updateNisa = (obj) => updateData((prev) => ({
+    ...prev, assets: { ...prev.assets, nisa: { ...prev.assets.nisa, ...obj } }
   }));
 
+  const addInvestment = () => {
+    if (!form.name) return;
+    updateNisa({ investments: [...investments, { ...form, id: genId() }] });
+    setForm({ name: "", nisaType: "つみたて", purchasePrice: 0, quantity: 0, currentPrice: 0, memo: "" });
+    setShowAdd(false);
+  };
+
+  const delInvestment = (id) => updateNisa({ investments: investments.filter((i) => i.id !== id) });
+
+  const F = (field) => (v) => setForm((f) => ({ ...f, [field]: v }));
+
   const sections = [
-    { key: "tsumitateUsed", label: "つみたて投資枠", limit: LIMITS.tsumitate, color: colors.income },
-    { key: "growthUsed",    label: "成長投資枠",     limit: LIMITS.growth,    color: colors.saving },
-    { key: "lifetimeUsed",  label: "生涯非課税枠",   limit: LIMITS.lifetime,  color: colors.asset },
+    { label: "つみたて投資枠", used: tsumitateUsed, limit: LIMITS.tsumitate, color: colors.income },
+    { label: "成長投資枠",     used: growthUsed,    limit: LIMITS.growth,    color: colors.saving },
+    { label: "生涯非課税枠",   used: lifetimeUsed,  limit: LIMITS.lifetime,  color: colors.asset },
   ];
 
   return (
     <div>
+      {/* 枠管理カード */}
       <Card style={{ backgroundColor: "#F0FFF4", border: `2px solid ${colors.income}` }}>
         <SectionHeader title={`${year}年 NISA枠管理`} color={colors.income} />
-        {sections.map(({ key, label, limit, color }) => {
-          const used = nisa[key] || 0;
+        <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 12 }}>
+          ※ 枠使用額は登録銘柄の取得額から自動計算。生涯枠はつみたて＋成長の合計です。
+        </div>
+        {sections.map(({ label, used, limit, color }) => {
           const remaining = limit - used;
           return (
-            <div key={key} style={{ marginBottom: 20 }}>
+            <div key={label} style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color }}>{label}</span>
                 <span style={{ fontSize: 12, color: colors.textLight }}>上限: {fmtYen(limit)}</span>
               </div>
-              <AmountInput value={nisa[key] || 0} onChange={update(key)} />
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
                 <span style={{ color: colors.textLight }}>使用済み: {fmtYen(used)}</span>
                 <span style={{ color: remaining >= 0 ? colors.income : colors.expense, fontWeight: 600 }}>
@@ -1875,13 +1908,94 @@ function NisaTab({ data, updateData }) {
             </div>
           );
         })}
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 13, color: colors.textLight }}>今年度合計使用</span>
-          <span style={{ fontSize: 16, fontWeight: 700, color: colors.income }}>
-            {fmtYen((nisa.tsumitateUsed || 0) + (nisa.growthUsed || 0))}
-          </span>
-        </div>
       </Card>
+
+      {/* 保有銘柄サマリー */}
+      {investments.length > 0 && (
+        <Card>
+          <SectionHeader title="保有銘柄 評価サマリー" color={colors.income} />
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>評価額合計</span>
+            <span style={{ fontSize: 22, fontWeight: 800, color: colors.income }}>{fmtYen(totalValue)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>取得額合計</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{fmtYen(totalCost)}</span>
+          </div>
+          <Divider />
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>含み損益</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: totalPnl >= 0 ? colors.income : colors.expense }}>
+              {totalPnl >= 0 ? "+" : ""}{fmtYen(totalPnl)}
+              <span style={{ fontSize: 12, marginLeft: 4 }}>
+                ({totalCost > 0 ? (totalPnl / totalCost * 100).toFixed(1) : 0}%)
+              </span>
+            </span>
+          </div>
+        </Card>
+      )}
+
+      {/* 保有銘柄一覧 */}
+      {investments.map((inv) => {
+        const value = inv.currentPrice * inv.quantity;
+        const cost  = inv.purchasePrice * inv.quantity;
+        const pnl   = value - cost;
+        const pct   = cost > 0 ? (pnl / cost * 100).toFixed(1) : 0;
+        return (
+          <Card key={inv.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>{inv.name}</div>
+                <Badge
+                  label={inv.nisaType === "つみたて" ? "つみたて投資枠" : "成長投資枠"}
+                  bgColor={inv.nisaType === "つみたて" ? colors.income : colors.saving}
+                  style={{ marginTop: 4 }}
+                />
+              </div>
+              <button onClick={() => delInvestment(inv.id)}
+                style={{ background: "none", border: "none", color: colors.expense, cursor: "pointer", fontSize: 18 }}>🗑</button>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>評価額</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: colors.income }}>{fmtYen(value)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 12, color: colors.textLight }}>
+                取得単価 {fmtYen(inv.purchasePrice)} × {fmt(inv.quantity)}口
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: pnl >= 0 ? colors.income : colors.expense }}>
+                {pnl >= 0 ? "+" : ""}{fmtYen(pnl)} ({pct}%)
+              </span>
+            </div>
+            {inv.memo ? <div style={{ fontSize: 12, color: colors.textLight, marginTop: 4 }}>{inv.memo}</div> : null}
+          </Card>
+        );
+      })}
+
+      {/* 銘柄追加フォーム */}
+      {showAdd ? (
+        <Card>
+          <SectionHeader title="銘柄を追加" color={colors.income} />
+          <TextInput label="ファンド名" value={form.name} onChange={F("name")} placeholder="例: eMAXIS Slim 全世界株式" />
+          <SelectInput label="NISA枠の種類" value={form.nisaType} onChange={F("nisaType")}
+            options={["つみたて", "成長"]} />
+          <AmountInput label="取得単価（1口あたり）" value={form.purchasePrice} onChange={F("purchasePrice")} />
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>保有口数</label>
+            <input type="number" inputMode="numeric" value={form.quantity || ""}
+              onChange={(e) => F("quantity")(parseNum(e.target.value))}
+              style={{ width: "100%", padding: 12, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+          </div>
+          <AmountInput label="現在の基準価額（1口あたり）" value={form.currentPrice} onChange={F("currentPrice")} />
+          <TextInput label="メモ（任意）" value={form.memo} onChange={F("memo")} placeholder="メモ" />
+          <div style={{ display: "flex", gap: 8 }}>
+            <PrimaryButton onClick={addInvestment} color={colors.income} style={{ flex: 1 }}>追加</PrimaryButton>
+            <OutlineButton onClick={() => setShowAdd(false)} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
+          </div>
+        </Card>
+      ) : (
+        <PrimaryButton onClick={() => setShowAdd(true)} color={colors.income}>＋ 銘柄を追加</PrimaryButton>
+      )}
     </div>
   );
 }
@@ -2022,16 +2136,16 @@ function AnnuityTab({ data, updateData }) {
 // 総資産・純資産
 function NetWorthTab({ data }) {
   const bankTotal     = (data.assets.bankAccounts || []).reduce((a, b) => a + b.balance, 0);
-  const investTotal   = (data.assets.investments || []).reduce((a, inv) => a + inv.currentPrice * inv.quantity, 0);
+  const nisaInvest    = (data.assets.nisa?.investments || []).reduce((a, i) => a + i.currentPrice * i.quantity, 0);
   const idecoVal      = data.assets.ideco?.currentValue || 0;
   const annuityVal    = (data.assets.variableAnnuities || []).reduce((a, v) => a + v.currentValue, 0);
-  const totalAsset    = bankTotal + investTotal + idecoVal + annuityVal;
+  const totalAsset    = bankTotal + nisaInvest + idecoVal + annuityVal;
   const totalLoan     = (data.loans || []).reduce((a, l) => a + l.remainingBalance, 0);
   const netWorth      = totalAsset - totalLoan;
 
   const pieData = [
     { name: "現金・預金", value: bankTotal, color: colors.saving },
-    { name: "投資資産", value: investTotal, color: colors.income },
+    { name: "NISA投資", value: nisaInvest, color: colors.income },
     { name: "iDeCo", value: idecoVal, color: "#F39C12" },
     { name: "変額年金", value: annuityVal, color: colors.asset },
   ].filter((d) => d.value > 0);
@@ -2042,7 +2156,7 @@ function NetWorthTab({ data }) {
         <SectionHeader title="純資産（ネットワース）" color={colors.asset} />
         {[
           { label: "現金・預金", val: bankTotal, color: colors.saving },
-          { label: "投資資産", val: investTotal, color: colors.income },
+          { label: "NISA投資", val: nisaInvest, color: colors.income },
           { label: "iDeCo", val: idecoVal, color: "#F39C12" },
           { label: "変額年金", val: annuityVal, color: colors.asset },
         ].map(({ label, val, color }) => (
@@ -2126,7 +2240,7 @@ function SimulationTab({ data, updateData }) {
 function FutureAssetSim({ data }) {
   const totalAsset = (() => {
     const b = (data.assets.bankAccounts || []).reduce((a, x) => a + x.balance, 0);
-    const i = (data.assets.investments || []).reduce((a, x) => a + x.currentPrice * x.quantity, 0);
+    const i = (data.assets.nisa?.investments || []).reduce((a, x) => a + x.currentPrice * x.quantity, 0);
     return b + i + (data.assets.ideco?.currentValue || 0);
   })();
 
@@ -2349,7 +2463,7 @@ function RetirementSim({ data }) {
   // 現在の準備額
   const currentSavings = (() => {
     const b = (data.assets.bankAccounts || []).reduce((a, x) => a + x.balance, 0);
-    const i = (data.assets.investments || []).reduce((a, x) => a + x.currentPrice * x.quantity, 0);
+    const i = (data.assets.nisa?.investments || []).reduce((a, x) => a + x.currentPrice * x.quantity, 0);
     return b + i + (data.assets.ideco?.currentValue || 0) + severance;
   })();
 
@@ -2424,7 +2538,7 @@ function RetirementSim({ data }) {
 function FireSim({ data }) {
   const totalAsset = (() => {
     const b = (data.assets.bankAccounts || []).reduce((a, x) => a + x.balance, 0);
-    const i = (data.assets.investments || []).reduce((a, x) => a + x.currentPrice * x.quantity, 0);
+    const i = (data.assets.nisa?.investments || []).reduce((a, x) => a + x.currentPrice * x.quantity, 0);
     return b + i + (data.assets.ideco?.currentValue || 0);
   })();
 
