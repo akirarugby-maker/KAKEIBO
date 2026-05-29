@@ -718,6 +718,7 @@ function HomeTab({ data, updateData }) {
     .slice(0, 5);
 
   const [cardMonth, setCardMonth] = useState(ym);
+  const loanTypeIcon = { car: "🚗", housing: "🏠", scholarship: "🎓", other: "💰" };
 
   // cardMonth用のデータを計算
   const cardSalary = data.salaries.find((s) => s.month === cardMonth);

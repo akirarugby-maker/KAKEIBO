@@ -1090,6 +1090,12 @@ function HomeTab(_ref16) {
     _useState10 = _slicedToArray(_useState1, 2),
     cardMonth = _useState10[0],
     setCardMonth = _useState10[1];
+  var loanTypeIcon = {
+    car: "🚗",
+    housing: "🏠",
+    scholarship: "🎓",
+    other: "💰"
+  };
 
   // cardMonth用のデータを計算
   var cardSalary = data.salaries.find(function (s) {
