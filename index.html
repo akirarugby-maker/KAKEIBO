@@ -8,7 +8,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/recharts@2.13.3/umd/Recharts.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Noto Sans JP', sans-serif; background: #F8F9FA; }
@@ -27,16 +26,198 @@
     var useRef = React.useRef;
     var useMemo = React.useMemo;
 
-    // Recharts グローバルをローカルに展開（読み込み失敗時はダミーを使用）
-    var _Recharts = (typeof Recharts !== 'undefined') ? Recharts : {};
-    var _dummy = function(p){ return React.createElement('div', {style:{color:'#999',fontSize:12,textAlign:'center',padding:8}}, 'グラフ読込中...'); };
-    var LineChart = _Recharts.LineChart||_dummy, Line = _Recharts.Line||_dummy;
-    var BarChart = _Recharts.BarChart||_dummy, Bar = _Recharts.Bar||_dummy;
-    var RechartsPie = _Recharts.PieChart||_dummy, Pie = _Recharts.Pie||_dummy, Cell = _Recharts.Cell||_dummy;
-    var XAxis = _Recharts.XAxis||_dummy, YAxis = _Recharts.YAxis||_dummy;
-    var CartesianGrid = _Recharts.CartesianGrid||_dummy, Tooltip = _Recharts.Tooltip||_dummy;
-    var Legend = _Recharts.Legend||_dummy, ResponsiveContainer = _Recharts.ResponsiveContainer||_dummy;
-    var AreaChart = _Recharts.AreaChart||_dummy, Area = _Recharts.Area||_dummy;
+    // ===== SVG自前グラフコンポーネント（Recharts不要）=====
+
+    // 数値フォーマット（グラフ用）
+    function fmtM(v){ return Math.abs(v)>=10000 ? Math.round(v/10000)+'万' : Math.round(v).toLocaleString(); }
+
+    // ツールチップ状態
+    var _tip = { show:false, x:0, y:0, text:'' };
+
+    // ResponsiveContainer: 子にwidth/heightを渡す wrapper
+    function ResponsiveContainer(p) {
+      var ref = React.useRef(null);
+      var _s = React.useState(p.width==='100%' ? 340 : (p.width||340));
+      var w = _s[0], setW = _s[1];
+      React.useEffect(function(){
+        if(ref.current){ setW(ref.current.offsetWidth||340); }
+      },[]);
+      var h = p.height || 200;
+      var child = React.Children.only(p.children);
+      return React.createElement('div',{ref:ref,style:{width:'100%',height:h}},
+        React.cloneElement(child,{width:w,height:h})
+      );
+    }
+
+    // PieChart (ドーナツ型)
+    function RechartsPie(p) {
+      var w=p.width||340, h=p.height||200;
+      var cx=w/2, cy=h/2, r=Math.min(w,h)*0.38, ir=r*0.5;
+      var pieChild = null;
+      React.Children.forEach(p.children, function(c){ if(c && c.type===Pie) pieChild=c; });
+      if(!pieChild) return React.createElement('svg',{width:w,height:h});
+      var data=pieChild.props.data||[], dataKey=pieChild.props.dataKey||'value';
+      var cells=[]; React.Children.forEach(pieChild.props.children,function(c){if(c&&c.type===Cell)cells.push(c);});
+      var total=data.reduce(function(s,d){return s+(d[dataKey]||0);},0);
+      if(total===0) return React.createElement('svg',{width:w,height:h});
+      var paths=[]; var angle=-Math.PI/2;
+      data.forEach(function(d,i){
+        var val=d[dataKey]||0; var pct=val/total;
+        var sweep=pct*2*Math.PI; var end=angle+sweep;
+        var large=sweep>Math.PI?1:0;
+        var x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
+        var x2=cx+r*Math.cos(end),  y2=cy+r*Math.sin(end);
+        var xi1=cx+ir*Math.cos(angle),yi1=cy+ir*Math.sin(angle);
+        var xi2=cx+ir*Math.cos(end),  yi2=cy+ir*Math.sin(end);
+        var fill=(cells[i]&&cells[i].props.fill)||d.color||'#CCC';
+        var mx=cx+(r+ir)/2*Math.cos(angle+sweep/2), my=cy+(r+ir)/2*Math.sin(angle+sweep/2);
+        var pathD='M '+x1+' '+y1+' A '+r+' '+r+' 0 '+large+' 1 '+x2+' '+y2+' L '+xi2+' '+yi2+' A '+ir+' '+ir+' 0 '+large+' 0 '+xi1+' '+yi1+' Z';
+        paths.push(React.createElement('g',{key:i},
+          React.createElement('path',{d:pathD,fill:fill,stroke:'#fff',strokeWidth:1.5}),
+          pct>0.07 ? React.createElement('text',{x:mx,y:my,textAnchor:'middle',dominantBaseline:'middle',fontSize:9,fill:'#fff',fontWeight:'bold'},
+            d.name+' '+Math.round(pct*100)+'%') : null
+        ));
+        angle=end;
+      });
+      return React.createElement('svg',{width:w,height:h},paths);
+    }
+    function Pie(p){ return null; }
+    function Cell(p){ return null; }
+
+    // AreaChart
+    function AreaChart(p) {
+      var w=p.width||340, h=p.height||200;
+      var data=p.data||[]; if(!data.length) return React.createElement('svg',{width:w,height:h});
+      var pl=40,pr=10,pt=10,pb=30;
+      var iw=w-pl-pr, ih=h-pt-pb;
+      var areaChildren=[], xKey='month';
+      React.Children.forEach(p.children,function(c){
+        if(!c) return;
+        if(c.type===XAxis && c.props.dataKey) xKey=c.props.dataKey;
+        if(c.type===Area) areaChildren.push(c);
+      });
+      // 全Areaのmax値
+      var allVals=[];
+      data.forEach(function(d){ areaChildren.forEach(function(a){ allVals.push(d[a.props.dataKey]||0); }); });
+      var maxV=Math.max.apply(null,allVals)||1;
+      var xStep=iw/(data.length-1||1);
+      var toX=function(i){ return pl+i*xStep; };
+      var toY=function(v){ return pt+ih*(1-v/maxV); };
+
+      var svgParts=[];
+      // グリッド
+      [0,0.25,0.5,0.75,1].forEach(function(t,i){
+        var y=pt+ih*t;
+        svgParts.push(React.createElement('line',{key:'g'+i,x1:pl,y1:y,x2:pl+iw,y2:y,stroke:'#EEE',strokeWidth:1}));
+        svgParts.push(React.createElement('text',{key:'gl'+i,x:pl-4,y:y+3,textAnchor:'end',fontSize:9,fill:'#999'},fmtM(maxV*(1-t))));
+      });
+      // エリア & ライン
+      areaChildren.forEach(function(a,ai){
+        var dk=a.props.dataKey, clr=a.props.stroke||'#2980B9', fillClr=a.props.fill||'#D6EAF8';
+        var pts=data.map(function(d,i){ return toX(i)+','+toY(d[dk]||0); }).join(' ');
+        var lastX=toX(data.length-1), firstX=toX(0), baseY=pt+ih;
+        var polyPts=toX(0)+','+baseY+' '+pts+' '+lastX+','+baseY;
+        svgParts.push(React.createElement('polygon',{key:'a'+ai,points:polyPts,fill:fillClr,opacity:0.7}));
+        svgParts.push(React.createElement('polyline',{key:'l'+ai,points:pts,fill:'none',stroke:clr,strokeWidth:2}));
+      });
+      // X軸ラベル（間引き）
+      var step=Math.ceil(data.length/6);
+      data.forEach(function(d,i){
+        if(i%step!==0 && i!==data.length-1) return;
+        svgParts.push(React.createElement('text',{key:'x'+i,x:toX(i),y:h-pb+14,textAnchor:'middle',fontSize:9,fill:'#999'},d[xKey]||''));
+      });
+      return React.createElement('svg',{width:w,height:h},svgParts);
+    }
+    function Area(p){ return null; }
+    function Line(p){ return null; }
+
+    // BarChart
+    function BarChart(p) {
+      var w=p.width||340, h=p.height||200;
+      var data=p.data||[]; if(!data.length) return React.createElement('svg',{width:w,height:h});
+      var pl=40,pr=10,pt=10,pb=30;
+      var iw=w-pl-pr, ih=h-pt-pb;
+      var barChildren=[], xKey='month';
+      React.Children.forEach(p.children,function(c){
+        if(!c) return;
+        if(c.type===XAxis && c.props.dataKey) xKey=c.props.dataKey;
+        if(c.type===Bar) barChildren.push(c);
+      });
+      var allVals=[0];
+      data.forEach(function(d){ barChildren.forEach(function(b){ allVals.push(d[b.props.dataKey]||0); }); });
+      var maxV=Math.max.apply(null,allVals)||1;
+      var groupW=iw/data.length;
+      var barW=Math.max(4, groupW/barChildren.length*0.7);
+      var svgParts=[];
+      [0,0.25,0.5,0.75,1].forEach(function(t,i){
+        var y=pt+ih*t;
+        svgParts.push(React.createElement('line',{key:'g'+i,x1:pl,y1:y,x2:pl+iw,y2:y,stroke:'#EEE',strokeWidth:1}));
+        svgParts.push(React.createElement('text',{key:'gl'+i,x:pl-4,y:y+3,textAnchor:'end',fontSize:9,fill:'#999'},fmtM(maxV*(1-t))));
+      });
+      data.forEach(function(d,di){
+        var gx=pl+di*groupW+groupW/2;
+        barChildren.forEach(function(b,bi){
+          var dk=b.props.dataKey, clr=b.props.fill||'#2980B9';
+          var val=d[dk]||0, barH=ih*val/maxV;
+          var bx=gx-(barChildren.length/2-bi-0.5)*barW*1.1-barW/2;
+          svgParts.push(React.createElement('rect',{key:'b'+di+'_'+bi,x:bx,y:pt+ih-barH,width:barW,height:barH,fill:clr,rx:2}));
+        });
+        svgParts.push(React.createElement('text',{key:'x'+di,x:gx,y:h-pb+14,textAnchor:'middle',fontSize:9,fill:'#999'},d[xKey]||''));
+      });
+      return React.createElement('svg',{width:w,height:h},svgParts);
+    }
+    function Bar(p){ return null; }
+
+    // LineChart（シミュレーション用）
+    function LineChart(p) {
+      var w=p.width||340, h=p.height||200;
+      var data=p.data||[]; if(!data.length) return React.createElement('svg',{width:w,height:h});
+      var pl=40,pr=10,pt=10,pb=30;
+      var iw=w-pl-pr, ih=h-pt-pb;
+      var lineChildren=[], xKey='year';
+      React.Children.forEach(p.children,function(c){
+        if(!c) return;
+        if(c.type===XAxis && c.props.dataKey) xKey=c.props.dataKey;
+        if(c.type===Line) lineChildren.push(c);
+        if(c.type===Area) lineChildren.push(c);
+      });
+      var allVals=[0];
+      data.forEach(function(d){ lineChildren.forEach(function(l){ allVals.push(d[l.props.dataKey]||0); }); });
+      var maxV=Math.max.apply(null,allVals)||1;
+      var xStep=iw/(data.length-1||1);
+      var toX=function(i){ return pl+i*xStep; };
+      var toY=function(v){ return pt+ih*(1-v/maxV); };
+      var svgParts=[];
+      [0,0.25,0.5,0.75,1].forEach(function(t,i){
+        var y=pt+ih*t;
+        svgParts.push(React.createElement('line',{key:'g'+i,x1:pl,y1:y,x2:pl+iw,y2:y,stroke:'#EEE',strokeWidth:1}));
+        svgParts.push(React.createElement('text',{key:'gl'+i,x:pl-4,y:y+3,textAnchor:'end',fontSize:9,fill:'#999'},fmtM(maxV*(1-t))));
+      });
+      lineChildren.forEach(function(l,li){
+        var dk=l.props.dataKey, clr=l.props.stroke||'#2980B9';
+        var dashed=l.props.strokeDasharray?'4,4':null;
+        var pts=data.map(function(d,i){ return toX(i)+','+toY(d[dk]||0); }).join(' ');
+        if(l.type===Area){
+          var fillClr=l.props.fill||'#D6EAF8';
+          var polyPts=toX(0)+','+(pt+ih)+' '+pts+' '+toX(data.length-1)+','+(pt+ih);
+          svgParts.push(React.createElement('polygon',{key:'af'+li,points:polyPts,fill:fillClr,opacity:0.6}));
+        }
+        svgParts.push(React.createElement('polyline',{key:'ll'+li,points:pts,fill:'none',stroke:clr,strokeWidth:2,strokeDasharray:dashed||undefined}));
+      });
+      var step=Math.ceil(data.length/6);
+      data.forEach(function(d,i){
+        if(i%step!==0 && i!==data.length-1) return;
+        svgParts.push(React.createElement('text',{key:'x'+i,x:toX(i),y:h-pb+14,textAnchor:'middle',fontSize:9,fill:'#999'},d[xKey]||''));
+      });
+      return React.createElement('svg',{width:w,height:h},svgParts);
+    }
+
+    // ダミー（使用されるが描画不要なもの）
+    function XAxis(p){ return null; }
+    function YAxis(p){ return null; }
+    function CartesianGrid(p){ return null; }
+    function Tooltip(p){ return null; }
+    function Legend(p){ return null; }
 
     // SVGアイコンコンポーネント（lucide-react代替）
     function Home(p)         { return React.createElement('svg',{width:p.size||20,height:p.size||20,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},React.createElement('path',{d:'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'}),React.createElement('polyline',{points:'9 22 9 12 15 12 15 22'})); }
@@ -50,8 +231,8 @@
     function ChevronDown(p)  { return React.createElement('svg',{width:p.size||16,height:p.size||16,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},React.createElement('polyline',{points:'6 9 12 15 18 9'})); }
     function Trash2(p)       { return React.createElement('svg',{width:p.size||18,height:p.size||18,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},React.createElement('polyline',{points:'3 6 5 6 21 6'}),React.createElement('path',{d:'M19 6l-1 14H6L5 6'}),React.createElement('path',{d:'M10 11v6'}),React.createElement('path',{d:'M14 11v6'}),React.createElement('path',{d:'M9 6V4h6v2'})); }
     function Plus(p)         { return React.createElement('svg',{width:p.size||18,height:p.size||18,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},React.createElement('line',{x1:12,y1:5,x2:12,y2:19}),React.createElement('line',{x1:5,y1:12,x2:19,y2:12})); }
-    // 未使用だが参照されるダミー
-    var Minus=Plus, Edit2=Plus, Trash2=Trash2, BarChart2=BarChart, PieChart=RechartsPie,
+    // 未使用だが参照されるダミー変数
+    var Minus=Plus, Edit2=Plus, BarChart2=BarChart, PieChart=RechartsPie,
         Activity=AlertCircle, Calendar=AlertCircle, Check=Plus, RefreshCw=Plus;
   </script>
   <script src="app.js"></script>
