@@ -1294,7 +1294,7 @@ const LOAN_TYPE_ICON = { car: "🚗", housing: "🏠", scholarship: "🎓", othe
 function LoanTab({ data, updateData }) {
   const [subtab, setSubtab] = useState("一覧");
   const [selectedLoan, setSelectedLoan] = useState(null);
-  const [showAdd, setShowAdd] = useState(false);
+  const [editingLoanId, setEditingLoanId] = useState(null);
 
   const tabs = ["一覧", "登録", "返済表", "繰上シミュ"];
 
@@ -1303,7 +1303,7 @@ function LoanTab({ data, updateData }) {
       <PageTitle title="🏦 ローン・返済" />
       <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto" }}>
         {tabs.map((t) => (
-          <button key={t} onClick={() => setSubtab(t)} style={{
+          <button key={t} onClick={() => { setSubtab(t); if (t !== "登録") setEditingLoanId(null); }} style={{
             flex: "0 0 auto", padding: "8px 16px",
             backgroundColor: subtab === t ? colors.loan : "#EEE",
             color: subtab === t ? "#fff" : colors.text,
@@ -1312,17 +1312,17 @@ function LoanTab({ data, updateData }) {
         ))}
       </div>
       <div style={{ padding: "0 16px" }}>
-        {subtab === "一覧"     && <LoanList    data={data} updateData={updateData} setSubtab={setSubtab} setSelectedLoan={setSelectedLoan} />}
-        {subtab === "登録"     && <LoanForm    data={data} updateData={updateData} setSubtab={setSubtab} />}
-        {subtab === "返済表"   && <LoanSchedule data={data} selectedLoan={selectedLoan} setSelectedLoan={setSelectedLoan} />}
-        {subtab === "繰上シミュ" && <LoanPrepay  data={data} selectedLoan={selectedLoan} setSelectedLoan={setSelectedLoan} />}
+        {subtab === "一覧"       && <LoanList     data={data} updateData={updateData} setSubtab={setSubtab} setSelectedLoan={setSelectedLoan} setEditingLoanId={setEditingLoanId} />}
+        {subtab === "登録"       && <LoanForm     data={data} updateData={updateData} setSubtab={setSubtab} editingLoanId={editingLoanId} setEditingLoanId={setEditingLoanId} />}
+        {subtab === "返済表"     && <LoanSchedule data={data} selectedLoan={selectedLoan} setSelectedLoan={setSelectedLoan} />}
+        {subtab === "繰上シミュ" && <LoanPrepay   data={data} selectedLoan={selectedLoan} setSelectedLoan={setSelectedLoan} />}
       </div>
     </div>
   );
 }
 
 // ローン一覧
-function LoanList({ data, updateData, setSubtab, setSelectedLoan }) {
+function LoanList({ data, updateData, setSubtab, setSelectedLoan, setEditingLoanId }) {
   const totalBalance = data.loans.reduce((a, l) => a + l.remainingBalance, 0);
   const totalMonthly = data.loans.reduce((a, l) => a + l.monthlyPayment, 0);
 
@@ -1360,7 +1360,12 @@ function LoanList({ data, updateData, setSubtab, setSelectedLoan }) {
                 <span style={{ fontSize: 20, marginRight: 6 }}>{LOAN_TYPE_ICON[loan.type] || "💰"}</span>
                 <span style={{ fontSize: 16, fontWeight: 700 }}>{loan.name}</span>
               </div>
-              <button onClick={() => del(loan.id)} style={{ background: "none", border: "none", color: colors.expense, cursor: "pointer", fontSize: 18 }}>🗑</button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setEditingLoanId(loan.id); setSubtab("登録"); }}
+                  style={{ background: "none", border: "none", color: colors.saving, cursor: "pointer", fontSize: 16 }}>✏️</button>
+                <button onClick={() => del(loan.id)}
+                  style={{ background: "none", border: "none", color: colors.expense, cursor: "pointer", fontSize: 16 }}>🗑</button>
+              </div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
               <span style={{ fontSize: 13, color: colors.textLight }}>残高</span>
@@ -1392,26 +1397,41 @@ function LoanList({ data, updateData, setSubtab, setSelectedLoan }) {
   );
 }
 
-// ローン登録フォーム
-function LoanForm({ data, updateData, setSubtab }) {
-  const [form, setForm] = useState({
+// ローン登録・編集フォーム（editingLoanId があれば編集モード）
+function LoanForm({ data, updateData, setSubtab, editingLoanId, setEditingLoanId }) {
+  const editTarget = editingLoanId ? data.loans.find((l) => l.id === editingLoanId) : null;
+  const isEdit = !!editTarget;
+
+  const [form, setForm] = useState(editTarget ? { ...editTarget } : {
     type: "car", name: "", totalAmount: 0, remainingBalance: 0,
     monthlyPayment: 0, interestRate: 0, startDate: "", endDate: "", memo: "",
   });
   const [saved, setSaved] = useState(false);
 
+  // 編集対象が切り替わったらフォームを再初期化
+  useEffect(() => {
+    if (editTarget) setForm({ ...editTarget });
+  }, [editingLoanId]);
+
   const save = () => {
     if (!form.name || !form.remainingBalance) return;
-    updateData((prev) => ({ ...prev, loans: [...prev.loans, { ...form, id: genId(), payments: [] }] }));
+    if (isEdit) {
+      updateData((prev) => ({
+        ...prev,
+        loans: prev.loans.map((l) => l.id === editingLoanId ? { ...l, ...form } : l),
+      }));
+    } else {
+      updateData((prev) => ({ ...prev, loans: [...prev.loans, { ...form, id: genId(), payments: [] }] }));
+    }
     setSaved(true);
-    setTimeout(() => { setSaved(false); setSubtab("一覧"); }, 1000);
+    setTimeout(() => { setSaved(false); setEditingLoanId(null); setSubtab("一覧"); }, 1000);
   };
 
   const F = (field) => (v) => setForm((f) => ({ ...f, [field]: v }));
 
   return (
     <Card>
-      <SectionHeader title="ローン登録" color={colors.loan} />
+      <SectionHeader title={isEdit ? `✏️ ${form.name} を編集` : "ローン登録"} color={colors.loan} />
       <SelectInput label="ローン種類" value={form.type} onChange={F("type")} options={LOAN_TYPES} />
       <TextInput label="ローン名（例: トヨタファイナンス）" value={form.name} onChange={F("name")} placeholder="ローン名" />
       <AmountInput label="借入総額" value={form.totalAmount} onChange={F("totalAmount")} />
@@ -1436,9 +1456,16 @@ function LoanForm({ data, updateData, setSubtab }) {
         </div>
       </div>
       <TextInput label="メモ" value={form.memo} onChange={F("memo")} placeholder="メモ（任意）" />
-      <PrimaryButton onClick={save} color={saved ? colors.neutral : colors.loan}>
-        {saved ? "✅ 登録しました" : "登録する"}
-      </PrimaryButton>
+      <div style={{ display: "flex", gap: 8 }}>
+        <PrimaryButton onClick={save} color={saved ? colors.neutral : colors.loan} style={{ flex: 1 }}>
+          {saved ? "✅ 保存しました" : isEdit ? "変更を保存する" : "登録する"}
+        </PrimaryButton>
+        {isEdit && (
+          <OutlineButton onClick={() => { setEditingLoanId(null); setSubtab("一覧"); }} color={colors.neutral} style={{ flex: 1 }}>
+            キャンセル
+          </OutlineButton>
+        )}
+      </div>
     </Card>
   );
 }

@@ -2443,10 +2443,10 @@ function LoanTab(_ref29) {
     _useState30 = _slicedToArray(_useState29, 2),
     selectedLoan = _useState30[0],
     setSelectedLoan = _useState30[1];
-  var _useState31 = useState(false),
+  var _useState31 = useState(null),
     _useState32 = _slicedToArray(_useState31, 2),
-    showAdd = _useState32[0],
-    setShowAdd = _useState32[1];
+    editingLoanId = _useState32[0],
+    setEditingLoanId = _useState32[1];
   var tabs = ["一覧", "登録", "返済表", "繰上シミュ"];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(PageTitle, {
     title: "\uD83C\uDFE6 \u30ED\u30FC\u30F3\u30FB\u8FD4\u6E08"
@@ -2461,7 +2461,8 @@ function LoanTab(_ref29) {
     return /*#__PURE__*/React.createElement("button", {
       key: t,
       onClick: function onClick() {
-        return setSubtab(t);
+        setSubtab(t);
+        if (t !== "登録") setEditingLoanId(null);
       },
       style: {
         flex: "0 0 auto",
@@ -2483,11 +2484,14 @@ function LoanTab(_ref29) {
     data: data,
     updateData: updateData,
     setSubtab: setSubtab,
-    setSelectedLoan: setSelectedLoan
+    setSelectedLoan: setSelectedLoan,
+    setEditingLoanId: setEditingLoanId
   }), subtab === "登録" && /*#__PURE__*/React.createElement(LoanForm, {
     data: data,
     updateData: updateData,
-    setSubtab: setSubtab
+    setSubtab: setSubtab,
+    editingLoanId: editingLoanId,
+    setEditingLoanId: setEditingLoanId
   }), subtab === "返済表" && /*#__PURE__*/React.createElement(LoanSchedule, {
     data: data,
     selectedLoan: selectedLoan,
@@ -2504,7 +2508,8 @@ function LoanList(_ref30) {
   var data = _ref30.data,
     updateData = _ref30.updateData,
     setSubtab = _ref30.setSubtab,
-    setSelectedLoan = _ref30.setSelectedLoan;
+    setSelectedLoan = _ref30.setSelectedLoan,
+    setEditingLoanId = _ref30.setEditingLoanId;
   var totalBalance = data.loans.reduce(function (a, l) {
     return a + l.remainingBalance;
   }, 0);
@@ -2589,7 +2594,24 @@ function LoanList(_ref30) {
         fontSize: 16,
         fontWeight: 700
       }
-    }, loan.name)), /*#__PURE__*/React.createElement("button", {
+    }, loan.name)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        setEditingLoanId(loan.id);
+        setSubtab("登録");
+      },
+      style: {
+        background: "none",
+        border: "none",
+        color: colors.saving,
+        cursor: "pointer",
+        fontSize: 16
+      }
+    }, "\u270F\uFE0F"), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
         return del(loan.id);
       },
@@ -2598,9 +2620,9 @@ function LoanList(_ref30) {
         border: "none",
         color: colors.expense,
         cursor: "pointer",
-        fontSize: 18
+        fontSize: 16
       }
-    }, "\uD83D\uDDD1")), /*#__PURE__*/React.createElement("div", {
+    }, "\uD83D\uDDD1"))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         justifyContent: "space-between",
@@ -2685,12 +2707,18 @@ function LoanList(_ref30) {
   }, "\uFF0B \u30ED\u30FC\u30F3\u3092\u767B\u9332\u3059\u308B"));
 }
 
-// ローン登録フォーム
+// ローン登録・編集フォーム（editingLoanId があれば編集モード）
 function LoanForm(_ref31) {
   var data = _ref31.data,
     updateData = _ref31.updateData,
-    setSubtab = _ref31.setSubtab;
-  var _useState33 = useState({
+    setSubtab = _ref31.setSubtab,
+    editingLoanId = _ref31.editingLoanId,
+    setEditingLoanId = _ref31.setEditingLoanId;
+  var editTarget = editingLoanId ? data.loans.find(function (l) {
+    return l.id === editingLoanId;
+  }) : null;
+  var isEdit = !!editTarget;
+  var _useState33 = useState(editTarget ? _objectSpread({}, editTarget) : {
       type: "car",
       name: "",
       totalAmount: 0,
@@ -2708,19 +2736,35 @@ function LoanForm(_ref31) {
     _useState36 = _slicedToArray(_useState35, 2),
     saved = _useState36[0],
     setSaved = _useState36[1];
+
+  // 編集対象が切り替わったらフォームを再初期化
+  useEffect(function () {
+    if (editTarget) setForm(_objectSpread({}, editTarget));
+  }, [editingLoanId]);
   var save = function save() {
     if (!form.name || !form.remainingBalance) return;
-    updateData(function (prev) {
-      return _objectSpread(_objectSpread({}, prev), {}, {
-        loans: [].concat(_toConsumableArray(prev.loans), [_objectSpread(_objectSpread({}, form), {}, {
-          id: genId(),
-          payments: []
-        })])
+    if (isEdit) {
+      updateData(function (prev) {
+        return _objectSpread(_objectSpread({}, prev), {}, {
+          loans: prev.loans.map(function (l) {
+            return l.id === editingLoanId ? _objectSpread(_objectSpread({}, l), form) : l;
+          })
+        });
       });
-    });
+    } else {
+      updateData(function (prev) {
+        return _objectSpread(_objectSpread({}, prev), {}, {
+          loans: [].concat(_toConsumableArray(prev.loans), [_objectSpread(_objectSpread({}, form), {}, {
+            id: genId(),
+            payments: []
+          })])
+        });
+      });
+    }
     setSaved(true);
     setTimeout(function () {
       setSaved(false);
+      setEditingLoanId(null);
       setSubtab("一覧");
     }, 1000);
   };
@@ -2732,7 +2776,7 @@ function LoanForm(_ref31) {
     };
   };
   return /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
-    title: "\u30ED\u30FC\u30F3\u767B\u9332",
+    title: isEdit ? "\u270F\uFE0F ".concat(form.name, " \u3092\u7DE8\u96C6") : "ローン登録",
     color: colors.loan
   }), /*#__PURE__*/React.createElement(SelectInput, {
     label: "\u30ED\u30FC\u30F3\u7A2E\u985E",
@@ -2848,10 +2892,27 @@ function LoanForm(_ref31) {
     value: form.memo,
     onChange: F("memo"),
     placeholder: "\u30E1\u30E2\uFF08\u4EFB\u610F\uFF09"
-  }), /*#__PURE__*/React.createElement(PrimaryButton, {
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(PrimaryButton, {
     onClick: save,
-    color: saved ? colors.neutral : colors.loan
-  }, saved ? "✅ 登録しました" : "登録する"));
+    color: saved ? colors.neutral : colors.loan,
+    style: {
+      flex: 1
+    }
+  }, saved ? "✅ 保存しました" : isEdit ? "変更を保存する" : "登録する"), isEdit && /*#__PURE__*/React.createElement(OutlineButton, {
+    onClick: function onClick() {
+      setEditingLoanId(null);
+      setSubtab("一覧");
+    },
+    color: colors.neutral,
+    style: {
+      flex: 1
+    }
+  }, "\u30AD\u30E3\u30F3\u30BB\u30EB")));
 }
 
 // 返済スケジュール表
