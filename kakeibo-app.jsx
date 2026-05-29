@@ -717,8 +717,29 @@ function HomeTab({ data, updateData }) {
     .sort((a, b) => b.date > a.date ? 1 : -1)
     .slice(0, 5);
 
-  // ローン残高一覧
-  const loanTypeIcon = { car: "🚗", housing: "🏠", scholarship: "🎓", other: "💰" };
+  const [cardMonth, setCardMonth] = useState(ym);
+
+  // cardMonth用のデータを計算
+  const cardSalary = data.salaries.find((s) => s.month === cardMonth);
+  const cardGross = cardSalary
+    ? cardSalary.basicSalary + Object.values(cardSalary.allowances || {}).reduce((a, b) => a + b, 0)
+    : 0;
+  const cardDed = cardSalary
+    ? Object.values(cardSalary.deductions || {}).reduce((a, b) => a + b, 0)
+    : 0;
+  const cardNet = cardGross - cardDed + (cardSalary?.bonus || 0) + (cardSalary?.sideIncome || 0);
+  const cardExpense = data.expenses.filter((e) => e.date?.startsWith(cardMonth)).reduce((a, e) => a + e.amount, 0);
+  const cardBalance = cardNet - cardExpense;
+
+  const shiftCardMonth = (delta) => {
+    const [y, m] = cardMonth.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    // 未来月には進めない
+    if (next <= ym) setCardMonth(next);
+  };
+  const [cm_y, cm_m] = cardMonth.split("-").map(Number);
+  const isCurrentMonth = cardMonth === ym;
 
   const [bm_y, bm_m] = baseMonth.split("-").map(Number);
 
@@ -732,22 +753,41 @@ function HomeTab({ data, updateData }) {
         </span>
       </div>
 
-      {/* 1. 今月の収支カード */}
+      {/* 1. 収支カード（月スライド対応） */}
       <div style={{ padding: "0 16px" }}>
         <Card style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "#fff" }}>
+          {/* 月ナビゲーター */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <button onClick={() => shiftCardMonth(-1)} style={{
+              background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8,
+              color: "#fff", fontSize: 20, width: 36, height: 36, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>‹</button>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>
+              {cm_y}年{cm_m}月{isCurrentMonth ? "（今月）" : ""}
+            </span>
+            <button onClick={() => shiftCardMonth(1)} style={{
+              background: isCurrentMonth ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.2)",
+              border: "none", borderRadius: 8,
+              color: isCurrentMonth ? "rgba(255,255,255,0.3)" : "#fff",
+              fontSize: 20, width: 36, height: 36,
+              cursor: isCurrentMonth ? "default" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>›</button>
+          </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ fontSize: 14, opacity: 0.9 }}>手取り</span>
-            <span style={{ fontSize: 22, fontWeight: 700 }}>{fmtYen(netIncome)}</span>
+            <span style={{ fontSize: 22, fontWeight: 700 }}>{fmtYen(cardNet)}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ fontSize: 14, opacity: 0.9 }}>支出</span>
-            <span style={{ fontSize: 22, fontWeight: 700 }}>-{fmtYen(totalExpense)}</span>
+            <span style={{ fontSize: 22, fontWeight: 700 }}>-{fmtYen(cardExpense)}</span>
           </div>
           <div style={{ height: 1, backgroundColor: "rgba(255,255,255,0.3)", marginBottom: 8 }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 15, fontWeight: 600 }}>収支</span>
-            <span style={{ fontSize: 26, fontWeight: 800, color: balance >= 0 ? "#A8FFB0" : "#FFB0B0" }}>
-              {balance >= 0 ? "+" : ""}{fmtYen(balance)}
+            <span style={{ fontSize: 26, fontWeight: 800, color: cardBalance >= 0 ? "#A8FFB0" : "#FFB0B0" }}>
+              {cardBalance >= 0 ? "+" : ""}{fmtYen(cardBalance)}
             </span>
           </div>
         </Card>
