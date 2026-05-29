@@ -51,6 +51,7 @@ const colors = {
 const initialState = {
   salaries: [],
   expenses: [],
+  futurePlans: [],
   budgets: {
     "食費": 50000, "外食": 20000, "住居費": 80000, "光熱費": 15000,
     "通信費": 10000, "交通費": 20000, "保険料": 30000, "医療費": 10000,
@@ -729,7 +730,10 @@ function HomeTab({ data, updateData }) {
   // 将来予測の行
   const forecasts = [5, 10, 15, 20].map((years) => {
     const months = years * 12;
-    const futureAsset    = totalAsset + monthlyBalance * months + totalMonthlyInvest * months;
+    const planCost = (data.futurePlans || [])
+      .filter((p) => (p.years || 0) <= years)
+      .reduce((a, p) => a + (p.amount || 0), 0);
+    const futureAsset    = totalAsset + monthlyBalance * months + totalMonthlyInvest * months - planCost;
     const futureLoan     = loanAfterMonths(months);
     const futureNetWorth = futureAsset - futureLoan;
     return { years, futureAsset, futureLoan, futureNetWorth };
@@ -1326,19 +1330,15 @@ function ExpenseTab({ data, updateData }) {
 
   const monthExpenses = data.expenses.filter((e) => e.date?.startsWith(month));
 
-  // 日別ページの日付切り替え
   const navigateDay = (dateStr) => setSelectedDate(dateStr);
-
-  // 日別ページ表示中は分析タブ切り替えを無効化
   const handleSubtab = (t) => { setSubtab(t); setSelectedDate(null); };
 
   return (
     <div>
       <PageTitle title="💳 支出" />
-      {/* サブタブ */}
       {!selectedDate && (
-        <div style={{ display: "flex", gap: 8, padding: "0 16px 12px" }}>
-          {["月別", "分析"].map((t) => (
+        <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto" }}>
+          {["月別", "分析", "将来プラン"].map((t) => (
             <button key={t} onClick={() => handleSubtab(t)} style={{
               flex: "0 0 auto", padding: "8px 20px",
               backgroundColor: subtab === t ? colors.expense : "#EEE",
@@ -1351,7 +1351,6 @@ function ExpenseTab({ data, updateData }) {
 
       <div style={{ padding: selectedDate ? "0" : "0 0px" }}>
         {selectedDate ? (
-          // 日別詳細ページ（日付ナビを内部で処理）
           <ExpenseDayDetailWrapper
             date={selectedDate}
             data={data}
@@ -1367,15 +1366,145 @@ function ExpenseTab({ data, updateData }) {
             setMonth={setMonth}
             onSelectDate={setSelectedDate}
           />
-        ) : (
+        ) : subtab === "分析" ? (
           <ExpenseAnalysis
             data={data}
             month={month}
             setMonth={setMonth}
             monthExpenses={monthExpenses}
           />
+        ) : (
+          <FuturePlanTab data={data} updateData={updateData} />
         )}
       </div>
+    </div>
+  );
+}
+
+// ===== 将来プランタブ =====
+const PLAN_TYPES = [
+  { type: "wedding",  label: "💍 結婚資金",    color: "#E91E63" },
+  { type: "car",      label: "🚗 車買い替え",  color: "#E67E22" },
+  { type: "house",    label: "🏠 住宅購入",    color: "#2980B9" },
+  { type: "travel",   label: "✈️ 海外旅行",   color: "#27AE60" },
+  { type: "other",    label: "🎯 その他",      color: "#8E44AD" },
+];
+
+function FuturePlanTab({ data, updateData }) {
+  const plans = data.futurePlans || [];
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ type: "wedding", label: "", years: 5, amount: 0, memo: "" });
+
+  const F = (field) => (v) => setForm((f) => ({ ...f, [field]: v }));
+
+  const resetForm = () => { setForm({ type: "wedding", label: "", years: 5, amount: 0, memo: "" }); setEditingId(null); setShowForm(false); };
+
+  const save = () => {
+    if (!form.amount) return;
+    const planType = PLAN_TYPES.find((p) => p.type === form.type);
+    const entry = { ...form, label: form.label || planType?.label || form.type, id: editingId || genId() };
+    if (editingId) {
+      updateData((prev) => ({ ...prev, futurePlans: prev.futurePlans.map((p) => p.id === editingId ? entry : p) }));
+    } else {
+      updateData((prev) => ({ ...prev, futurePlans: [...(prev.futurePlans || []), entry] }));
+    }
+    resetForm();
+  };
+
+  const del = (id) => updateData((prev) => ({ ...prev, futurePlans: prev.futurePlans.filter((p) => p.id !== id) }));
+
+  const startEdit = (plan) => {
+    setForm({ type: plan.type, label: plan.label, years: plan.years, amount: plan.amount, memo: plan.memo || "" });
+    setEditingId(plan.id);
+    setShowForm(true);
+  };
+
+  const totalPlan = plans.reduce((a, p) => a + (p.amount || 0), 0);
+  const sorted = [...plans].sort((a, b) => a.years - b.years);
+
+  return (
+    <div style={{ padding: "0 16px" }}>
+      {/* 合計カード */}
+      {plans.length > 0 && (
+        <Card style={{ border: `1.5px solid ${colors.expense}` }}>
+          <SectionHeader title="将来の必要資金 合計" color={colors.expense} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>{plans.length}件のプラン</span>
+            <span style={{ fontSize: 24, fontWeight: 800, color: colors.expense }}>{fmtYen(totalPlan)}</span>
+          </div>
+          <div style={{ fontSize: 11, color: colors.textLight, marginTop: 4 }}>
+            ※ ホーム画面の将来資産予測に反映されます
+          </div>
+        </Card>
+      )}
+
+      {/* プラン一覧 */}
+      {sorted.map((plan) => {
+        const pt = PLAN_TYPES.find((p) => p.type === plan.type);
+        return (
+          <Card key={plan.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>{plan.label}</div>
+                <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
+                  <span style={{
+                    backgroundColor: (pt?.color || colors.neutral) + "22",
+                    color: pt?.color || colors.neutral,
+                    borderRadius: 8, padding: "2px 8px", fontSize: 11, fontWeight: 700,
+                  }}>{plan.years}年後</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: colors.expense }}>{fmtYen(plan.amount)}</span>
+                </div>
+                {plan.memo ? <div style={{ fontSize: 11, color: colors.textLight, marginTop: 4 }}>{plan.memo}</div> : null}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => startEdit(plan)} style={{ background: "none", border: "none", color: colors.saving, cursor: "pointer", fontSize: 16 }}>✏️</button>
+                <button onClick={() => del(plan.id)} style={{ background: "none", border: "none", color: colors.expense, cursor: "pointer", fontSize: 16 }}>🗑</button>
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+
+      {/* 入力フォーム */}
+      {showForm ? (
+        <Card>
+          <SectionHeader title={editingId ? "プランを編集" : "プランを追加"} color={colors.expense} />
+          {/* 種別ボタン */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 6 }}>種別</label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {PLAN_TYPES.map((pt) => (
+                <button key={pt.type} onClick={() => {
+                  setForm((f) => ({ ...f, type: pt.type, label: f.label || pt.label }));
+                }} style={{
+                  padding: "6px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                  backgroundColor: form.type === pt.type ? pt.color : "#EEE",
+                  color: form.type === pt.type ? "#fff" : colors.text,
+                  border: "none", cursor: "pointer",
+                }}>{pt.label}</button>
+              ))}
+            </div>
+          </div>
+          <TextInput label="プラン名" value={form.label} onChange={F("label")}
+            placeholder={PLAN_TYPES.find((p) => p.type === form.type)?.label || "プラン名"} />
+          {/* 何年後 */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>何年後</label>
+            <input type="number" inputMode="numeric" value={form.years || ""}
+              onChange={(e) => F("years")(Math.max(1, parseInt(e.target.value) || 1))}
+              style={{ width: "100%", padding: 12, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+          </div>
+          <AmountInput label="必要金額" value={form.amount} onChange={F("amount")} />
+          <TextInput label="メモ（任意）" value={form.memo} onChange={F("memo")} placeholder="メモ" />
+          <div style={{ display: "flex", gap: 8 }}>
+            <PrimaryButton onClick={save} color={colors.expense} style={{ flex: 1 }}>{editingId ? "保存" : "追加"}</PrimaryButton>
+            <OutlineButton onClick={resetForm} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
+          </div>
+        </Card>
+      ) : (
+        <PrimaryButton onClick={() => setShowForm(true)} color={colors.expense}>＋ プランを追加</PrimaryButton>
+      )}
     </div>
   );
 }
