@@ -10,9 +10,9 @@
 フェーズ6:  ②支出タブ 後半（分析・予算） [✅]
 フェーズ7:  ③ローンタブ 前半（登録・一覧）[✅]
 フェーズ8:  ③ローンタブ 後半（返済表・繰上）[✅]
-フェーズ9:  ④資産タブ 銀行・株式・投信   [ ]
-フェーズ10: ④資産タブ NISA・iDeCo       [ ]
-フェーズ11: ④資産タブ 変額年金・総資産   [ ]
+フェーズ9:  ④資産タブ 銀行・株式・投信   [✅]
+フェーズ10: ④資産タブ NISA・iDeCo       [✅]
+フェーズ11: ④資産タブ 変額年金・総資産   [✅]
 フェーズ12: ⑤シミュ 将来資産・ローン完済 [ ]
 フェーズ13: ⑤シミュ 老後資金・FIRE試算  [ ]
 フェーズ14: AI機能統合                  [ ]
@@ -1623,11 +1623,465 @@ function LoanPrepay({ data, selectedLoan, setSelectedLoan }) {
   );
 }
 
+// ===== フェーズ9〜11: 資産タブ =====
+
+const ASSET_SUBTABS = ["銀行・現金", "株式・投信", "NISA", "iDeCo", "変額年金", "総資産"];
+
 function AssetTab({ data, updateData }) {
+  const [subtab, setSubtab] = useState("銀行・現金");
+
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ color: colors.text, margin: 0 }}>📈 資産</h2>
-      <p style={{ color: colors.textLight }}>フェーズ9〜11で実装予定</p>
+    <div>
+      <PageTitle title="📈 資産管理" />
+      <div style={{ display: "flex", gap: 6, padding: "0 16px 12px", overflowX: "auto" }}>
+        {ASSET_SUBTABS.map((t) => (
+          <button key={t} onClick={() => setSubtab(t)} style={{
+            flex: "0 0 auto", padding: "8px 12px",
+            backgroundColor: subtab === t ? colors.asset : "#EEE",
+            color: subtab === t ? "#fff" : colors.text,
+            border: "none", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>{t}</button>
+        ))}
+      </div>
+      <div style={{ padding: "0 16px" }}>
+        {subtab === "銀行・現金" && <BankTab     data={data} updateData={updateData} />}
+        {subtab === "株式・投信" && <InvestTab   data={data} updateData={updateData} />}
+        {subtab === "NISA"      && <NisaTab     data={data} updateData={updateData} />}
+        {subtab === "iDeCo"     && <IdecoTab    data={data} updateData={updateData} />}
+        {subtab === "変額年金"  && <AnnuityTab  data={data} updateData={updateData} />}
+        {subtab === "総資産"    && <NetWorthTab data={data} />}
+      </div>
+    </div>
+  );
+}
+
+// 銀行・現金
+function BankTab({ data, updateData }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", balance: 0, type: "普通", memo: "" });
+
+  const accounts = data.assets.bankAccounts || [];
+  const total = accounts.reduce((a, b) => a + b.balance, 0);
+
+  const add = () => {
+    if (!form.name) return;
+    updateData((prev) => ({
+      ...prev, assets: { ...prev.assets, bankAccounts: [...(prev.assets.bankAccounts || []), { ...form, id: genId() }] }
+    }));
+    setForm({ name: "", balance: 0, type: "普通", memo: "" });
+    setShowAdd(false);
+  };
+
+  const del = (id) => updateData((prev) => ({
+    ...prev, assets: { ...prev.assets, bankAccounts: prev.assets.bankAccounts.filter((a) => a.id !== id) }
+  }));
+
+  const update = (id, field, val) => updateData((prev) => ({
+    ...prev, assets: { ...prev.assets, bankAccounts: prev.assets.bankAccounts.map((a) => a.id === id ? { ...a, [field]: val } : a) }
+  }));
+
+  return (
+    <div>
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 14, color: colors.textLight }}>現金・預金合計</span>
+          <span style={{ fontSize: 24, fontWeight: 800, color: colors.asset }}>{fmtYen(total)}</span>
+        </div>
+      </Card>
+      {accounts.map((acc) => (
+        <Card key={acc.id}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{acc.name}</div>
+              <Badge label={acc.type} bgColor={colors.asset} style={{ marginTop: 4 }} />
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: colors.asset }}>{fmtYen(acc.balance)}</div>
+              <button onClick={() => del(acc.id)} style={{ fontSize: 11, color: colors.expense, background: "none", border: "none", cursor: "pointer", marginTop: 4 }}>削除</button>
+            </div>
+          </div>
+        </Card>
+      ))}
+      {showAdd ? (
+        <Card>
+          <SectionHeader title="口座追加" />
+          <TextInput label="銀行名・口座名" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="例: 三菱UFJ 普通" />
+          <AmountInput label="残高" value={form.balance} onChange={(v) => setForm((f) => ({ ...f, balance: v }))} />
+          <SelectInput label="種別" value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v }))} options={["普通", "定期", "積立", "MMF", "その他"]} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <PrimaryButton onClick={add} color={colors.asset} style={{ flex: 1 }}>追加</PrimaryButton>
+            <OutlineButton onClick={() => setShowAdd(false)} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
+          </div>
+        </Card>
+      ) : (
+        <PrimaryButton onClick={() => setShowAdd(true)} color={colors.asset}>＋ 口座を追加</PrimaryButton>
+      )}
+    </div>
+  );
+}
+
+// 株式・投信
+function InvestTab({ data, updateData }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", type: "fund", account: "NISA", purchasePrice: 0, quantity: 0, currentPrice: 0, purchaseDate: "", memo: "" });
+
+  const investments = data.assets.investments || [];
+  const totalValue = investments.reduce((a, inv) => a + inv.currentPrice * inv.quantity, 0);
+  const totalCost  = investments.reduce((a, inv) => a + inv.purchasePrice * inv.quantity, 0);
+  const totalPnl   = totalValue - totalCost;
+
+  const add = () => {
+    if (!form.name) return;
+    updateData((prev) => ({
+      ...prev, assets: { ...prev.assets, investments: [...(prev.assets.investments || []), { ...form, id: genId() }] }
+    }));
+    setForm({ name: "", type: "fund", account: "NISA", purchasePrice: 0, quantity: 0, currentPrice: 0, purchaseDate: "", memo: "" });
+    setShowAdd(false);
+  };
+
+  const del = (id) => updateData((prev) => ({
+    ...prev, assets: { ...prev.assets, investments: prev.assets.investments.filter((i) => i.id !== id) }
+  }));
+
+  const TYPE_LABELS = { stock: "株式", fund: "投信", etf: "ETF", reit: "REIT", crypto: "暗号資産", other: "その他" };
+  const F = (field) => (v) => setForm((f) => ({ ...f, [field]: v }));
+
+  return (
+    <div>
+      {investments.length > 0 && (
+        <Card>
+          <SectionHeader title="投資資産合計" />
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>評価額合計</span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: colors.asset }}>{fmtYen(totalValue)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>取得額合計</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{fmtYen(totalCost)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>含み損益</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: totalPnl >= 0 ? colors.income : colors.expense }}>
+              {totalPnl >= 0 ? "+" : ""}{fmtYen(totalPnl)}
+              <span style={{ fontSize: 12, marginLeft: 4 }}>({totalCost > 0 ? (totalPnl / totalCost * 100).toFixed(1) : 0}%)</span>
+            </span>
+          </div>
+        </Card>
+      )}
+
+      {investments.map((inv) => {
+        const value = inv.currentPrice * inv.quantity;
+        const cost  = inv.purchasePrice * inv.quantity;
+        const pnl   = value - cost;
+        const pct   = cost > 0 ? (pnl / cost * 100).toFixed(1) : 0;
+        return (
+          <Card key={inv.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>📈 {inv.name}</div>
+                <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                  <Badge label={TYPE_LABELS[inv.type] || inv.type} bgColor={colors.saving} />
+                  <Badge label={inv.account} bgColor={colors.asset} />
+                </div>
+              </div>
+              <button onClick={() => del(inv.id)} style={{ fontSize: 11, color: colors.expense, background: "none", border: "none", cursor: "pointer" }}>削除</button>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>評価額</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: colors.asset }}>{fmtYen(value)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+              <span style={{ fontSize: 12, color: colors.textLight }}>取得単価 ¥{fmt(inv.purchasePrice)} × {fmt(inv.quantity)}口</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: pnl >= 0 ? colors.income : colors.expense }}>
+                {pnl >= 0 ? "+" : ""}{fmtYen(pnl)} ({pct}%)
+              </span>
+            </div>
+          </Card>
+        );
+      })}
+
+      {showAdd ? (
+        <Card>
+          <SectionHeader title="銘柄追加" />
+          <TextInput label="銘柄名・ファンド名" value={form.name} onChange={F("name")} placeholder="例: eMAXIS Slim 全世界株式" />
+          <SelectInput label="種類" value={form.type} onChange={F("type")} options={[
+            { value: "stock", label: "株式" }, { value: "fund", label: "投資信託" },
+            { value: "etf", label: "ETF" }, { value: "reit", label: "REIT" },
+            { value: "crypto", label: "暗号資産" }, { value: "other", label: "その他" },
+          ]} />
+          <SelectInput label="口座" value={form.account} onChange={F("account")} options={["NISA（つみたて）", "NISA（成長）", "iDeCo", "特定", "一般", "その他"]} />
+          <AmountInput label="取得単価（1口あたり）" value={form.purchasePrice} onChange={F("purchasePrice")} />
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>保有口数</label>
+            <input type="number" inputMode="numeric" value={form.quantity || ""} onChange={(e) => F("quantity")(parseNum(e.target.value))}
+              style={{ width: "100%", padding: 12, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+          </div>
+          <AmountInput label="現在価格（1口あたり）" value={form.currentPrice} onChange={F("currentPrice")} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <PrimaryButton onClick={add} color={colors.asset} style={{ flex: 1 }}>追加</PrimaryButton>
+            <OutlineButton onClick={() => setShowAdd(false)} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
+          </div>
+        </Card>
+      ) : (
+        <PrimaryButton onClick={() => setShowAdd(true)} color={colors.asset}>＋ 銘柄を追加</PrimaryButton>
+      )}
+    </div>
+  );
+}
+
+// NISA管理
+function NisaTab({ data, updateData }) {
+  const nisa = data.assets.nisa || {};
+  const year = nisa.year || new Date().getFullYear();
+  const LIMITS = { tsumitate: 1200000, growth: 2400000, lifetime: 18000000 };
+
+  const update = (field) => (val) => updateData((prev) => ({
+    ...prev, assets: { ...prev.assets, nisa: { ...prev.assets.nisa, [field]: val } }
+  }));
+
+  const sections = [
+    { key: "tsumitateUsed", label: "つみたて投資枠", limit: LIMITS.tsumitate, color: colors.income },
+    { key: "growthUsed",    label: "成長投資枠",     limit: LIMITS.growth,    color: colors.saving },
+    { key: "lifetimeUsed",  label: "生涯非課税枠",   limit: LIMITS.lifetime,  color: colors.asset },
+  ];
+
+  return (
+    <div>
+      <Card style={{ backgroundColor: "#F0FFF4", border: `2px solid ${colors.income}` }}>
+        <SectionHeader title={`${year}年 NISA枠管理`} color={colors.income} />
+        {sections.map(({ key, label, limit, color }) => {
+          const used = nisa[key] || 0;
+          const remaining = limit - used;
+          return (
+            <div key={key} style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color }}>{label}</span>
+                <span style={{ fontSize: 12, color: colors.textLight }}>上限: {fmtYen(limit)}</span>
+              </div>
+              <AmountInput value={nisa[key] || 0} onChange={update(key)} />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                <span style={{ color: colors.textLight }}>使用済み: {fmtYen(used)}</span>
+                <span style={{ color: remaining >= 0 ? colors.income : colors.expense, fontWeight: 600 }}>
+                  残り: {fmtYen(Math.max(0, remaining))}
+                </span>
+              </div>
+              <ProgressBar value={used} max={limit} color={color} />
+            </div>
+          );
+        })}
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>今年度合計使用</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: colors.income }}>
+            {fmtYen((nisa.tsumitateUsed || 0) + (nisa.growthUsed || 0))}
+          </span>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// iDeCo管理
+function IdecoTab({ data, updateData }) {
+  const ideco = data.assets.ideco || {};
+  const F = (field) => (val) => updateData((prev) => ({
+    ...prev, assets: { ...prev.assets, ideco: { ...prev.assets.ideco, [field]: val } }
+  }));
+
+  const pnl = (ideco.currentValue || 0) - (ideco.totalContributed || 0);
+  const pct = ideco.totalContributed > 0 ? (pnl / ideco.totalContributed * 100).toFixed(1) : 0;
+
+  // 所得控除節税シミュレーション（概算）
+  const annualContrib = (ideco.monthlyContribution || 0) * 12;
+  const taxSaving = Math.round(annualContrib * 0.2);
+
+  return (
+    <div>
+      <Card>
+        <SectionHeader title="iDeCo 管理" color={colors.saving} />
+        <AmountInput label="月額拠出金" value={ideco.monthlyContribution} onChange={F("monthlyContribution")} />
+        <AmountInput label="累計拠出額" value={ideco.totalContributed} onChange={F("totalContributed")} />
+        <AmountInput label="現在評価額" value={ideco.currentValue} onChange={F("currentValue")} />
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>運用開始日</label>
+          <input type="month" value={ideco.startDate || ""} onChange={(e) => F("startDate")(e.target.value)}
+            style={{ width: "100%", padding: 12, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+        </div>
+      </Card>
+
+      {ideco.totalContributed > 0 && (
+        <Card style={{ backgroundColor: "#EBF5FB" }}>
+          <SectionHeader title="iDeCo 運用成績" color={colors.saving} />
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>現在評価額</span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: colors.saving }}>{fmtYen(ideco.currentValue || 0)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>運用益</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: pnl >= 0 ? colors.income : colors.expense }}>
+              {pnl >= 0 ? "+" : ""}{fmtYen(pnl)} ({pct}%)
+            </span>
+          </div>
+          <Divider />
+          <div style={{ fontSize: 13, color: colors.textLight, marginBottom: 4 }}>💡 所得控除効果（今年度・概算）</div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 13 }}>拠出額 {fmtYen(annualContrib)} × 税率20%</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: colors.income }}>≈ {fmtYen(taxSaving)} 節税</span>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// 変額年金保険
+function AnnuityTab({ data, updateData }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const annuities = data.assets.variableAnnuities || [];
+
+  const [form, setForm] = useState({
+    name: "", contractDate: "", monthlyPremium: 0, totalPremium: 0,
+    currentValue: 0, maturityDate: "", maturityAmount: 0, deathBenefit: 0,
+    fundAllocation: [{ fundName: "", allocation: 100 }], memo: "",
+  });
+
+  const add = () => {
+    if (!form.name) return;
+    updateData((prev) => ({
+      ...prev, assets: { ...prev.assets, variableAnnuities: [...(prev.assets.variableAnnuities || []), { ...form, id: genId() }] }
+    }));
+    setShowAdd(false);
+  };
+
+  const del = (id) => updateData((prev) => ({
+    ...prev, assets: { ...prev.assets, variableAnnuities: prev.assets.variableAnnuities.filter((a) => a.id !== id) }
+  }));
+
+  const F = (field) => (v) => setForm((f) => ({ ...f, [field]: v }));
+
+  return (
+    <div>
+      {annuities.map((ann) => {
+        const pnl = ann.currentValue - ann.totalPremium;
+        const pct = ann.totalPremium > 0 ? (pnl / ann.totalPremium * 100).toFixed(2) : 0;
+        return (
+          <Card key={ann.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{ann.name}</div>
+              <button onClick={() => del(ann.id)} style={{ fontSize: 11, color: colors.expense, background: "none", border: "none", cursor: "pointer" }}>削除</button>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>現在評価額</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: colors.asset }}>{fmtYen(ann.currentValue)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>払込保険料</span>
+              <span style={{ fontSize: 14 }}>{fmtYen(ann.totalPremium)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>含み損益</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: pnl >= 0 ? colors.income : colors.expense }}>
+                {pnl >= 0 ? "+" : ""}{fmtYen(pnl)} ({pct}%)
+              </span>
+            </div>
+          </Card>
+        );
+      })}
+
+      {showAdd ? (
+        <Card>
+          <SectionHeader title="変額年金保険を追加" />
+          <TextInput label="保険会社・商品名" value={form.name} onChange={F("name")} placeholder="例: 日本生命 変額年金" />
+          <AmountInput label="月額保険料" value={form.monthlyPremium} onChange={F("monthlyPremium")} />
+          <AmountInput label="累計払込保険料" value={form.totalPremium} onChange={F("totalPremium")} />
+          <AmountInput label="現在評価額（解約返戻金）" value={form.currentValue} onChange={F("currentValue")} />
+          <AmountInput label="死亡保険金" value={form.deathBenefit} onChange={F("deathBenefit")} />
+          <TextInput label="メモ" value={form.memo} onChange={F("memo")} placeholder="メモ（任意）" />
+          <div style={{ backgroundColor: "#FFF3CD", borderRadius: 8, padding: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: "#856404" }}>
+              ⚠️ 変額年金は元本保証なし。早期解約で元本割れの可能性があります。
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <PrimaryButton onClick={add} color={colors.asset} style={{ flex: 1 }}>追加</PrimaryButton>
+            <OutlineButton onClick={() => setShowAdd(false)} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
+          </div>
+        </Card>
+      ) : (
+        <PrimaryButton onClick={() => setShowAdd(true)} color={colors.asset}>＋ 変額年金保険を追加</PrimaryButton>
+      )}
+    </div>
+  );
+}
+
+// 総資産・純資産
+function NetWorthTab({ data }) {
+  const bankTotal     = (data.assets.bankAccounts || []).reduce((a, b) => a + b.balance, 0);
+  const investTotal   = (data.assets.investments || []).reduce((a, inv) => a + inv.currentPrice * inv.quantity, 0);
+  const idecoVal      = data.assets.ideco?.currentValue || 0;
+  const annuityVal    = (data.assets.variableAnnuities || []).reduce((a, v) => a + v.currentValue, 0);
+  const totalAsset    = bankTotal + investTotal + idecoVal + annuityVal;
+  const totalLoan     = (data.loans || []).reduce((a, l) => a + l.remainingBalance, 0);
+  const netWorth      = totalAsset - totalLoan;
+
+  const pieData = [
+    { name: "現金・預金", value: bankTotal, color: colors.saving },
+    { name: "投資資産", value: investTotal, color: colors.income },
+    { name: "iDeCo", value: idecoVal, color: "#F39C12" },
+    { name: "変額年金", value: annuityVal, color: colors.asset },
+  ].filter((d) => d.value > 0);
+
+  return (
+    <div>
+      <Card>
+        <SectionHeader title="純資産（ネットワース）" color={colors.asset} />
+        {[
+          { label: "現金・預金", val: bankTotal, color: colors.saving },
+          { label: "投資資産", val: investTotal, color: colors.income },
+          { label: "iDeCo", val: idecoVal, color: "#F39C12" },
+          { label: "変額年金", val: annuityVal, color: colors.asset },
+        ].map(({ label, val, color }) => (
+          <div key={label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>{label}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color }}>{fmtYen(val)}</span>
+          </div>
+        ))}
+        <Divider />
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>総資産</span>
+          <span style={{ fontSize: 18, fontWeight: 800, color: colors.asset }}>{fmtYen(totalAsset)}</span>
+        </div>
+
+        <Divider />
+        {data.loans.map((l) => (
+          <div key={l.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>{LOAN_TYPE_ICON[l.type]} {l.name}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: colors.loan }}>▲{fmtYen(l.remainingBalance)}</span>
+          </div>
+        ))}
+        <Divider />
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>純資産</span>
+          <span style={{ fontSize: 24, fontWeight: 800, color: netWorth >= 0 ? colors.income : colors.expense }}>
+            {netWorth < 0 ? "▲" : ""}{fmtYen(Math.abs(netWorth))}
+          </span>
+        </div>
+      </Card>
+
+      {pieData.length > 0 && (
+        <Card>
+          <SectionHeader title="資産クラス別構成" />
+          <ResponsiveContainer width="100%" height={200}>
+            <RechartsPie>
+              <Pie data={pieData} cx="50%" cy="50%" outerRadius={75} dataKey="value"
+                label={({ name, percent }) => percent > 0.05 ? `${name} ${Math.round(percent * 100)}%` : ""}
+                fontSize={10}>
+                {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+              </Pie>
+              <Tooltip formatter={(v) => fmtYen(v)} />
+            </RechartsPie>
+          </ResponsiveContainer>
+        </Card>
+      )}
     </div>
   );
 }
