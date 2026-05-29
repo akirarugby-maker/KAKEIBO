@@ -20,6 +20,13 @@
 <body>
   <div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#999;font-family:sans-serif">読み込み中...</div></div>
   <script>
+    // React フックをグローバルに展開
+    var useState = React.useState;
+    var useEffect = React.useEffect;
+    var useCallback = React.useCallback;
+    var useRef = React.useRef;
+    var useMemo = React.useMemo;
+
     // Recharts グローバルをローカルに展開
     var _Recharts = Recharts;
     var LineChart = _Recharts.LineChart, Line = _Recharts.Line;
