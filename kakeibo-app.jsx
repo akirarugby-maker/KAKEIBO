@@ -93,20 +93,25 @@ const initialState = {
 };
 
 // ===== 支出カテゴリ定義 =====
-const expenseCategories = {
-  "食費":   { color: "#E74C3C", subcategories: ["外食", "スーパー", "コンビニ", "宅配"], isFixed: false },
-  "住居費": { color: "#E67E22", subcategories: ["家賃", "管理費", "駐車場", "修繕"], isFixed: true },
-  "光熱費": { color: "#F1C40F", subcategories: ["電気", "ガス", "水道"], isFixed: false },
-  "通信費": { color: "#2ECC71", subcategories: ["スマホ", "ネット", "NHK", "その他"], isFixed: true },
-  "交通費": { color: "#3498DB", subcategories: ["ガソリン", "高速", "電車", "タクシー"], isFixed: false },
-  "保険料": { color: "#9B59B6", subcategories: ["生命保険", "医療保険", "車保険", "火災保険"], isFixed: true },
-  "医療費": { color: "#E91E63", subcategories: ["病院", "薬", "歯科"], isFixed: false },
-  "教育費": { color: "#00BCD4", subcategories: ["学費", "塾", "習い事", "書籍"], isFixed: false },
-  "娯楽費": { color: "#FF9800", subcategories: ["旅行", "外食", "趣味", "サブスク"], isFixed: false },
-  "日用品": { color: "#795548", subcategories: ["消耗品", "家電", "家具"], isFixed: false },
-  "被服費": { color: "#607D8B", subcategories: ["衣類", "靴", "バッグ"], isFixed: false },
-  "その他": { color: "#95A5A6", subcategories: ["冠婚葬祭", "寄付", "その他"], isFixed: false },
-};
+const EXPENSE_CATS = [
+  { name: "食費",   color: "#E74C3C" },
+  { name: "住居費", color: "#E67E22" },
+  { name: "光熱費", color: "#F1C40F" },
+  { name: "通信費", color: "#2ECC71" },
+  { name: "交通費", color: "#3498DB" },
+  { name: "保険料", color: "#9B59B6" },
+  { name: "医療費", color: "#E91E63" },
+  { name: "勉強費", color: "#00BCD4" },
+  { name: "雑費",   color: "#795548" },
+  { name: "交際費", color: "#FF9800" },
+  { name: "車関係", color: "#546E7A" },
+  { name: "被服費", color: "#607D8B" },
+  { name: "その他", color: "#95A5A6" },
+];
+// 後方互換用マップ（分析・ホーム参照）
+const expenseCategories = Object.fromEntries(
+  EXPENSE_CATS.map((c) => [c.name, { color: c.color, subcategories: [], isFixed: false }])
+);
 
 // ===== localStorage ユーティリティ =====
 const STORAGE_KEY = "kakeibo-app-data";
@@ -987,151 +992,442 @@ function IncomeTab({ data, updateData }) {
 
 // ===== フェーズ5・6: 支出タブ =====
 
-const PAYMENT_METHODS = ["現金", "クレカ", "電子マネー", "口座振替", "その他"];
-const EXPENSE_SUBTABS = ["入力", "一覧", "分析", "予算"];
+// 日付文字列ユーティリティ
+function addDays(dateStr, n) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 
-function ExpenseTab({ data, updateData }) {
-  const [subtab, setSubtab] = useState("入力");
-  const [month, setMonth] = useState(currentYM());
+function daysInMonth(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
 
-  const monthExpenses = data.expenses.filter((e) => e.date?.startsWith(month));
+// 日別入力ページ
+function ExpenseDayDetail({ date, data, updateData, onBack }) {
+  const [selectedCat, setSelectedCat] = useState(null);
+  const [inputVal, setInputVal] = useState(0);
+  const [saved, setSaved] = useState(false);
+
+  // その日のカテゴリ別合計
+  const dayExps = data.expenses.filter((e) => e.date === date);
+  const catTotal = (name) => dayExps.filter((e) => e.category === name).reduce((a, e) => a + e.amount, 0);
+
+  const handleCatTap = (name) => {
+    if (selectedCat === name) {
+      setSelectedCat(null);
+    } else {
+      setSelectedCat(name);
+      setInputVal(catTotal(name));
+    }
+  };
+
+  const saveAmount = () => {
+    const newAmount = Number(inputVal) || 0;
+    // 既存のその日そのカテゴリのエントリを削除し、金額>0なら新規追加
+    updateData((prev) => {
+      const filtered = prev.expenses.filter((e) => !(e.date === date && e.category === selectedCat));
+      const next = newAmount > 0
+        ? [...filtered, { id: genId(), date, category: selectedCat, amount: newAmount, memo: "" }]
+        : filtered;
+      return { ...prev, expenses: next };
+    });
+    setSelectedCat(null);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1200);
+  };
+
+  const [y, m, d] = date.split("-").map(Number);
+  const dateLabel = `${y}年${m}月${d}日`;
 
   return (
     <div>
-      <PageTitle title="💳 支出" />
-      {/* サブタブ */}
-      <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto" }}>
-        {EXPENSE_SUBTABS.map((t) => (
-          <button key={t} onClick={() => setSubtab(t)} style={{
-            flex: "0 0 auto", padding: "8px 16px",
-            backgroundColor: subtab === t ? colors.expense : "#EEE",
-            color: subtab === t ? "#fff" : colors.text,
-            border: "none", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer",
-          }}>{t}</button>
-        ))}
+      {/* ヘッダー：戻る + 日付ナビ */}
+      <div style={{ display: "flex", alignItems: "center", padding: "4px 16px 8px", gap: 8 }}>
+        <button onClick={onBack} style={{
+          background: "none", border: "none", fontSize: 22, cursor: "pointer", color: colors.textLight, padding: "4px 0",
+        }}>←</button>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <button onClick={() => { onBack(); }} style={{ display: "none" }} />
+          <button onClick={() => updateDayAndKeepOpen(addDays(date, -1))}
+            style={{ background: "none", border: "1.5px solid #DDD", borderRadius: 8, padding: "6px 12px", fontSize: 18, cursor: "pointer", color: colors.text }}>‹</button>
+          <span style={{ fontSize: 16, fontWeight: 700, color: colors.text, minWidth: 140, textAlign: "center" }}>{dateLabel}</span>
+          <button onClick={() => updateDayAndKeepOpen(addDays(date, 1))}
+            style={{ background: "none", border: "1.5px solid #DDD", borderRadius: 8, padding: "6px 12px", fontSize: 18, cursor: "pointer", color: colors.text }}>›</button>
+        </div>
+        {saved && <span style={{ fontSize: 12, color: colors.income, fontWeight: 700 }}>✅ 保存</span>}
       </div>
 
+      {/* 日合計 */}
+      <div style={{ padding: "0 16px 8px" }}>
+        <div style={{
+          backgroundColor: "#FFF5F5", border: `1.5px solid ${colors.expense}`, borderRadius: 12,
+          padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>この日の合計</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: colors.expense }}>
+            -{fmtYen(dayExps.reduce((a, e) => a + e.amount, 0))}
+          </span>
+        </div>
+      </div>
+
+      {/* カテゴリ一覧 */}
       <div style={{ padding: "0 16px" }}>
-        {subtab === "入力"  && <ExpenseInput   data={data} updateData={updateData} />}
-        {subtab === "一覧"  && <ExpenseList    data={data} updateData={updateData} month={month} setMonth={setMonth} monthExpenses={monthExpenses} />}
-        {subtab === "分析"  && <ExpenseAnalysis data={data} month={month} setMonth={setMonth} monthExpenses={monthExpenses} />}
-        {subtab === "予算"  && <ExpenseBudget  data={data} updateData={updateData} month={month} setMonth={setMonth} monthExpenses={monthExpenses} />}
+        {EXPENSE_CATS.map((cat) => {
+          const total = catTotal(cat.name);
+          const isOpen = selectedCat === cat.name;
+          return (
+            <div key={cat.name}>
+              <div onClick={() => handleCatTap(cat.name)} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "13px 14px", marginBottom: 2, borderRadius: 12,
+                backgroundColor: isOpen ? "#FFF5F5" : colors.card,
+                border: isOpen ? `1.5px solid ${colors.expense}` : "1.5px solid transparent",
+                cursor: "pointer", transition: "all 0.15s",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: cat.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>{cat.name}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {total > 0 && (
+                    <span style={{ fontSize: 15, fontWeight: 700, color: colors.expense }}>-{fmtYen(total)}</span>
+                  )}
+                  <span style={{ fontSize: 18, color: colors.textLight }}>{isOpen ? "▲" : "▶"}</span>
+                </div>
+              </div>
+              {/* インライン入力 */}
+              {isOpen && (
+                <div style={{
+                  backgroundColor: "#FFF5F5", borderRadius: "0 0 12px 12px",
+                  padding: "12px 14px 14px", marginBottom: 6, marginTop: -2,
+                  border: `1.5px solid ${colors.expense}`, borderTop: "none",
+                }}>
+                  <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 8 }}>
+                    金額を入力（0で削除）
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="number" inputMode="numeric"
+                      value={inputVal || ""}
+                      onChange={(e) => setInputVal(parseNum(e.target.value))}
+                      placeholder="0"
+                      autoFocus
+                      style={{
+                        flex: 1, padding: "10px 12px", fontSize: 18, fontWeight: 700,
+                        border: `2px solid ${colors.expense}`, borderRadius: 10,
+                        boxSizing: "border-box", backgroundColor: "#FFF", textAlign: "right",
+                      }}
+                    />
+                    <button onClick={saveAmount} style={{
+                      padding: "10px 20px", backgroundColor: colors.expense, color: "#fff",
+                      border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
+                    }}>保存</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// 支出入力フォーム
-function ExpenseInput({ data, updateData }) {
-  const [form, setForm] = useState({
-    date: todayStr(),
-    amount: 0,
-    category: "食費",
-    subcategory: "",
-    isFixed: false,
-    memo: "",
-    paymentMethod: "現金",
-  });
-  const [added, setAdded] = useState(false);
+// ダミー関数（ExpenseDayDetail内で参照するが実体は親から注入）
+function updateDayAndKeepOpen() {}
 
-  const catList = Object.keys(expenseCategories);
-  const subList = expenseCategories[form.category]?.subcategories || [];
+// 月別支出一覧（メイン画面）
+function ExpenseMonthlyView({ data, updateData, month, setMonth, onSelectDate }) {
+  const days = daysInMonth(month);
+  const [y, m] = month.split("-").map(Number);
 
-  const add = () => {
-    if (!form.amount) return;
-    const newExp = {
-      ...form,
-      id: genId(),
-      amount: Number(form.amount),
-      isFixed: expenseCategories[form.category]?.isFixed || form.isFixed,
-    };
-    updateData((prev) => ({ ...prev, expenses: [...prev.expenses, newExp] }));
-    setForm((f) => ({ ...f, amount: 0, memo: "", subcategory: "" }));
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1500);
-  };
-
-  return (
-    <Card>
-      <SectionHeader title="クイック入力" color={colors.expense} />
-      {/* 日付 */}
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>日付</label>
-        <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-          style={{ width: "100%", padding: 12, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
-      </div>
-      {/* 金額 */}
-      <AmountInput label="金額" value={form.amount} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
-      {/* カテゴリ */}
-      <SelectInput label="カテゴリ" value={form.category}
-        onChange={(v) => setForm((f) => ({ ...f, category: v, subcategory: "" }))}
-        options={catList.map((c) => ({ value: c, label: c }))} />
-      {/* サブカテゴリ */}
-      {subList.length > 0 && (
-        <SelectInput label="サブカテゴリ" value={form.subcategory || subList[0]}
-          onChange={(v) => setForm((f) => ({ ...f, subcategory: v }))}
-          options={subList.map((s) => ({ value: s, label: s }))} />
-      )}
-      {/* 支払方法 */}
-      <SelectInput label="支払方法" value={form.paymentMethod}
-        onChange={(v) => setForm((f) => ({ ...f, paymentMethod: v }))}
-        options={PAYMENT_METHODS} />
-      {/* メモ */}
-      <TextInput label="メモ（任意）" value={form.memo} onChange={(v) => setForm((f) => ({ ...f, memo: v }))} placeholder="メモ" />
-      {/* 固定費チェック */}
-      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, cursor: "pointer" }}>
-        <input type="checkbox" checked={form.isFixed} onChange={(e) => setForm((f) => ({ ...f, isFixed: e.target.checked }))} />
-        <span style={{ fontSize: 14, color: colors.text }}>固定費として登録</span>
-      </label>
-      <PrimaryButton onClick={add} color={added ? colors.neutral : colors.expense}>
-        {added ? "✅ 追加しました" : "追加する"}
-      </PrimaryButton>
-    </Card>
-  );
-}
-
-// 支出一覧
-function ExpenseList({ data, updateData, month, setMonth, monthExpenses }) {
-  const sorted = [...monthExpenses].sort((a, b) => b.date > a.date ? 1 : -1);
-  const total = monthExpenses.reduce((a, e) => a + e.amount, 0);
-
-  const del = (id) => updateData((prev) => ({ ...prev, expenses: prev.expenses.filter((e) => e.id !== id) }));
+  const monthTotal = data.expenses
+    .filter((e) => e.date?.startsWith(month))
+    .reduce((a, e) => a + e.amount, 0);
 
   return (
     <div>
       <MonthNavigator month={month} setMonth={setMonth} />
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <span style={{ fontSize: 14, color: colors.textLight }}>{month}の合計</span>
-          <span style={{ fontSize: 22, fontWeight: 800, color: colors.expense }}>-{fmtYen(total)}</span>
+
+      {/* 月合計カード */}
+      <div style={{ padding: "0 16px 8px" }}>
+        <div style={{
+          backgroundColor: "#FFF5F5", border: `2px solid ${colors.expense}`, borderRadius: 14,
+          padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <span style={{ fontSize: 14, color: colors.textLight, fontWeight: 600 }}>{month} 合計支出</span>
+          <span style={{ fontSize: 22, fontWeight: 800, color: colors.expense }}>-{fmtYen(monthTotal)}</span>
         </div>
-      </Card>
-      {sorted.length > 0 ? sorted.map((e) => (
-        <SwipeDeleteItem key={e.id} onDelete={() => del(e.id)}>
-          <div style={{
-            backgroundColor: colors.card, padding: "12px 16px", borderRadius: 10,
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{
-                width: 10, height: 10, borderRadius: "50%",
-                backgroundColor: expenseCategories[e.category]?.color || colors.neutral,
-                flexShrink: 0,
-              }} />
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
-                  {e.category}{e.subcategory ? `・${e.subcategory}` : ""}
-                  {e.isFixed && <Badge label="固定費" bgColor={colors.saving} style={{ marginLeft: 6, fontSize: 10 }} />}
-                </div>
-                <div style={{ fontSize: 11, color: colors.textLight }}>
-                  {e.date}　{e.paymentMethod}{e.memo ? `　${e.memo}` : ""}
-                </div>
+      </div>
+
+      {/* 日付一覧テーブル */}
+      <div style={{ padding: "0 16px" }}>
+        {/* ヘッダー行 */}
+        <div style={{
+          display: "flex", alignItems: "center",
+          padding: "8px 14px", marginBottom: 4,
+          backgroundColor: "#F0F0F0", borderRadius: 8,
+        }}>
+          <span style={{ flex: "0 0 70px", fontSize: 12, color: colors.textLight, fontWeight: 700 }}>日付</span>
+          <span style={{ flex: 1, fontSize: 12, color: colors.textLight, fontWeight: 700 }}>カテゴリ内訳</span>
+          <span style={{ flex: "0 0 90px", fontSize: 12, color: colors.textLight, fontWeight: 700, textAlign: "right" }}>金額</span>
+        </div>
+
+        {Array.from({ length: days }, (_, i) => {
+          const day = i + 1;
+          const dateStr = `${month}-${String(day).padStart(2, "0")}`;
+          const dayExps = data.expenses.filter((e) => e.date === dateStr);
+          const dayTotal = dayExps.reduce((a, e) => a + e.amount, 0);
+          const today = todayStr();
+          const isToday = dateStr === today;
+
+          // カテゴリ色ドット（最大4つ）
+          const cats = [...new Set(dayExps.map((e) => e.category))].slice(0, 4);
+
+          return (
+            <div key={day} onClick={() => onSelectDate(dateStr)} style={{
+              display: "flex", alignItems: "center",
+              padding: "11px 14px", marginBottom: 3, borderRadius: 12,
+              backgroundColor: isToday ? "#FFF9E6" : colors.card,
+              border: isToday ? `1.5px solid #F1C40F` : `1.5px solid transparent`,
+              cursor: "pointer", transition: "background 0.1s",
+            }}>
+              {/* 日付 */}
+              <div style={{ flex: "0 0 70px" }}>
+                <span style={{ fontSize: 15, fontWeight: isToday ? 800 : 600, color: isToday ? "#B8860B" : colors.text }}>
+                  {m}/{day}
+                </span>
+                {isToday && <span style={{ fontSize: 10, color: "#B8860B", marginLeft: 4 }}>今日</span>}
+              </div>
+              {/* カテゴリドット */}
+              <div style={{ flex: 1, display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {cats.length > 0 ? cats.map((name) => {
+                  const cat = EXPENSE_CATS.find((c) => c.name === name);
+                  return (
+                    <div key={name} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: cat?.color || colors.neutral }} />
+                      <span style={{ fontSize: 10, color: colors.textLight }}>{name}</span>
+                    </div>
+                  );
+                }) : (
+                  <span style={{ fontSize: 11, color: "#DDD" }}>—</span>
+                )}
+              </div>
+              {/* 金額 */}
+              <div style={{ flex: "0 0 90px", textAlign: "right" }}>
+                {dayTotal > 0 ? (
+                  <span style={{ fontSize: 15, fontWeight: 700, color: colors.expense }}>-{fmtYen(dayTotal)}</span>
+                ) : (
+                  <span style={{ fontSize: 13, color: "#DDD" }}>—</span>
+                )}
               </div>
             </div>
-            <span style={{ fontSize: 16, fontWeight: 700, color: colors.expense }}>-{fmtYen(e.amount)}</span>
-          </div>
-        </SwipeDeleteItem>
-      )) : <EmptyState message="支出データがありません" />}
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ExpenseTab({ data, updateData }) {
+  const [subtab, setSubtab] = useState("月別");
+  const [month, setMonth] = useState(currentYM());
+  const [selectedDate, setSelectedDate] = useState(null);
+
+  const monthExpenses = data.expenses.filter((e) => e.date?.startsWith(month));
+
+  // 日別ページの日付切り替え
+  const navigateDay = (dateStr) => setSelectedDate(dateStr);
+
+  // 日別ページ表示中は分析タブ切り替えを無効化
+  const handleSubtab = (t) => { setSubtab(t); setSelectedDate(null); };
+
+  return (
+    <div>
+      <PageTitle title="💳 支出" />
+      {/* サブタブ */}
+      {!selectedDate && (
+        <div style={{ display: "flex", gap: 8, padding: "0 16px 12px" }}>
+          {["月別", "分析"].map((t) => (
+            <button key={t} onClick={() => handleSubtab(t)} style={{
+              flex: "0 0 auto", padding: "8px 20px",
+              backgroundColor: subtab === t ? colors.expense : "#EEE",
+              color: subtab === t ? "#fff" : colors.text,
+              border: "none", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer",
+            }}>{t}</button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ padding: selectedDate ? "0" : "0 0px" }}>
+        {selectedDate ? (
+          // 日別詳細ページ（日付ナビを内部で処理）
+          <ExpenseDayDetailWrapper
+            date={selectedDate}
+            data={data}
+            updateData={updateData}
+            onBack={() => setSelectedDate(null)}
+            onNavigate={navigateDay}
+          />
+        ) : subtab === "月別" ? (
+          <ExpenseMonthlyView
+            data={data}
+            updateData={updateData}
+            month={month}
+            setMonth={setMonth}
+            onSelectDate={setSelectedDate}
+          />
+        ) : (
+          <ExpenseAnalysis
+            data={data}
+            month={month}
+            setMonth={setMonth}
+            monthExpenses={monthExpenses}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ラッパー：日付ナビを正しく扱う
+function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate }) {
+  const [currentDate, setCurrentDate] = useState(date);
+
+  // 親からdateが変わった場合は同期
+  React.useEffect(() => { setCurrentDate(date); }, [date]);
+
+  const [y, mm, d] = currentDate.split("-").map(Number);
+  const dateLabel = `${y}年${mm}月${d}日`;
+  const [selectedCat, setSelectedCat] = useState(null);
+  const [inputVal, setInputVal] = useState(0);
+  const [saved, setSaved] = useState(false);
+
+  const dayExps = data.expenses.filter((e) => e.date === currentDate);
+  const catTotal = (name) => dayExps.filter((e) => e.category === name).reduce((a, e) => a + e.amount, 0);
+
+  const handleCatTap = (name) => {
+    if (selectedCat === name) { setSelectedCat(null); return; }
+    setSelectedCat(name);
+    setInputVal(catTotal(name));
+  };
+
+  const saveAmount = () => {
+    const newAmount = Number(inputVal) || 0;
+    updateData((prev) => {
+      const filtered = prev.expenses.filter((e) => !(e.date === currentDate && e.category === selectedCat));
+      const next = newAmount > 0
+        ? [...filtered, { id: genId(), date: currentDate, category: selectedCat, amount: newAmount, memo: "" }]
+        : filtered;
+      return { ...prev, expenses: next };
+    });
+    setSelectedCat(null);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1200);
+  };
+
+  const goDay = (delta) => {
+    setSelectedCat(null);
+    setCurrentDate((prev) => addDays(prev, delta));
+  };
+
+  const dayTotal = dayExps.reduce((a, e) => a + e.amount, 0);
+
+  return (
+    <div>
+      {/* ヘッダー */}
+      <div style={{ display: "flex", alignItems: "center", padding: "4px 16px 8px", gap: 4 }}>
+        <button onClick={onBack} style={{
+          background: "none", border: "none", fontSize: 14, cursor: "pointer",
+          color: colors.textLight, padding: "6px 8px", borderRadius: 8,
+          display: "flex", alignItems: "center", gap: 4,
+        }}>
+          ← 一覧
+        </button>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <button onClick={() => goDay(-1)} style={{
+            background: "none", border: "1.5px solid #DDD", borderRadius: 8,
+            padding: "6px 14px", fontSize: 18, cursor: "pointer", color: colors.text, lineHeight: 1,
+          }}>‹</button>
+          <span style={{ fontSize: 15, fontWeight: 700, color: colors.text, minWidth: 130, textAlign: "center" }}>{dateLabel}</span>
+          <button onClick={() => goDay(1)} style={{
+            background: "none", border: "1.5px solid #DDD", borderRadius: 8,
+            padding: "6px 14px", fontSize: 18, cursor: "pointer", color: colors.text, lineHeight: 1,
+          }}>›</button>
+        </div>
+        {saved && <span style={{ fontSize: 12, color: colors.income, fontWeight: 700 }}>✅</span>}
+      </div>
+
+      {/* 日合計バー */}
+      <div style={{ padding: "0 16px 10px" }}>
+        <div style={{
+          backgroundColor: "#FFF5F5", border: `1.5px solid ${colors.expense}`, borderRadius: 12,
+          padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>この日の合計</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: colors.expense }}>-{fmtYen(dayTotal)}</span>
+        </div>
+      </div>
+
+      {/* カテゴリ一覧 */}
+      <div style={{ padding: "0 16px" }}>
+        {EXPENSE_CATS.map((cat) => {
+          const total = catTotal(cat.name);
+          const isOpen = selectedCat === cat.name;
+          return (
+            <div key={cat.name} style={{ marginBottom: 3 }}>
+              <div onClick={() => handleCatTap(cat.name)} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "13px 14px", borderRadius: isOpen ? "12px 12px 0 0" : 12,
+                backgroundColor: isOpen ? "#FFF0F0" : colors.card,
+                border: `1.5px solid ${isOpen ? colors.expense : "transparent"}`,
+                borderBottom: isOpen ? "none" : undefined,
+                cursor: "pointer",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: cat.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>{cat.name}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {total > 0 && (
+                    <span style={{ fontSize: 15, fontWeight: 700, color: colors.expense }}>-{fmtYen(total)}</span>
+                  )}
+                  <span style={{ fontSize: 14, color: colors.textLight }}>{isOpen ? "▲" : "▶"}</span>
+                </div>
+              </div>
+              {isOpen && (
+                <div style={{
+                  backgroundColor: "#FFF0F0", borderRadius: "0 0 12px 12px",
+                  padding: "12px 14px 14px",
+                  border: `1.5px solid ${colors.expense}`, borderTop: "none",
+                }}>
+                  <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 8 }}>金額を入力（0で削除）</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="number" inputMode="numeric"
+                      value={inputVal || ""}
+                      onChange={(e) => setInputVal(parseNum(e.target.value))}
+                      placeholder="0"
+                      autoFocus
+                      style={{
+                        flex: 1, padding: "10px 12px", fontSize: 18, fontWeight: 700,
+                        border: `2px solid ${colors.expense}`, borderRadius: 10,
+                        boxSizing: "border-box", backgroundColor: "#FFF", textAlign: "right",
+                      }}
+                    />
+                    <button onClick={saveAmount} style={{
+                      padding: "10px 20px", backgroundColor: colors.expense, color: "#fff",
+                      border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
+                    }}>保存</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1225,61 +1521,6 @@ function ExpenseAnalysis({ data, month, setMonth, monthExpenses }) {
   );
 }
 
-// 予算管理
-function ExpenseBudget({ data, updateData, month, setMonth, monthExpenses }) {
-  const [editing, setEditing] = useState(null);
-  const [editVal, setEditVal] = useState(0);
-
-  const catTotals = {};
-  monthExpenses.forEach((e) => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
-
-  const saveBudget = (cat) => {
-    updateData((prev) => ({ ...prev, budgets: { ...prev.budgets, [cat]: editVal } }));
-    setEditing(null);
-  };
-
-  return (
-    <div>
-      <MonthNavigator month={month} setMonth={setMonth} />
-      <Card>
-        <SectionHeader title="カテゴリ別予算管理" />
-        {Object.keys(expenseCategories).map((cat) => {
-          const budget = data.budgets[cat] || 0;
-          const actual = catTotals[cat] || 0;
-          const over = budget > 0 && actual > budget;
-          return (
-            <div key={cat} style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: expenseCategories[cat].color }} />
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>{cat}</span>
-                  {over && <span style={{ fontSize: 10, color: colors.expense, fontWeight: 700 }}>⚠️ 超過</span>}
-                </div>
-                {editing === cat ? (
-                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                    <input type="number" inputMode="numeric" value={editVal} onChange={(e) => setEditVal(parseNum(e.target.value))}
-                      style={{ width: 90, padding: "4px 8px", fontSize: 13, border: "1px solid #CCC", borderRadius: 6 }} />
-                    <button onClick={() => saveBudget(cat)} style={{ padding: "4px 8px", backgroundColor: colors.income, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>保存</button>
-                  </div>
-                ) : (
-                  <button onClick={() => { setEditing(cat); setEditVal(budget); }}
-                    style={{ fontSize: 12, color: colors.saving, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                    予算: {fmtYen(budget)}
-                  </button>
-                )}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: colors.textLight, marginBottom: 4 }}>
-                <span>実績: {fmtYen(actual)}</span>
-                <span style={{ color: over ? colors.expense : colors.textLight }}>{budget > 0 ? `残: ${fmtYen(budget - actual)}` : "予算未設定"}</span>
-              </div>
-              {budget > 0 && <ProgressBar value={actual} max={budget} color={expenseCategories[cat].color} />}
-            </div>
-          );
-        })}
-      </Card>
-    </div>
-  );
-}
 
 // ===== フェーズ7・8: ローンタブ =====
 
