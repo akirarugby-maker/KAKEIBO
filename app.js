@@ -99,43 +99,56 @@ var initialState = {
 // ===== 支出カテゴリ定義 =====
 var EXPENSE_CATS = [{
   name: "食費",
-  color: "#E74C3C"
+  color: "#E74C3C",
+  isFixed: false
 }, {
   name: "住居費",
-  color: "#E67E22"
+  color: "#E67E22",
+  isFixed: true
 }, {
   name: "光熱費",
-  color: "#F1C40F"
+  color: "#F1C40F",
+  isFixed: false
 }, {
   name: "通信費",
-  color: "#2ECC71"
+  color: "#2ECC71",
+  isFixed: true
 }, {
   name: "交通費",
-  color: "#3498DB"
+  color: "#3498DB",
+  isFixed: false
 }, {
   name: "保険料",
-  color: "#9B59B6"
+  color: "#9B59B6",
+  isFixed: true
 }, {
   name: "医療費",
-  color: "#E91E63"
+  color: "#E91E63",
+  isFixed: false
 }, {
   name: "勉強費",
-  color: "#00BCD4"
+  color: "#00BCD4",
+  isFixed: false
 }, {
   name: "雑費",
-  color: "#795548"
+  color: "#795548",
+  isFixed: false
 }, {
   name: "交際費",
-  color: "#FF9800"
+  color: "#FF9800",
+  isFixed: false
 }, {
   name: "車関係",
-  color: "#546E7A"
+  color: "#546E7A",
+  isFixed: false
 }, {
   name: "被服費",
-  color: "#607D8B"
+  color: "#607D8B",
+  isFixed: false
 }, {
   name: "その他",
-  color: "#95A5A6"
+  color: "#95A5A6",
+  isFixed: false
 }];
 // 後方互換用マップ（分析・ホーム参照）
 var expenseCategories = Object.fromEntries(EXPENSE_CATS.map(function (c) {
@@ -1367,10 +1380,12 @@ function IncomeTab(_ref20) {
   var netPay = grossPay - totalDed;
   var totalIncome = netPay + (form.bonus || 0) + (form.sideIncome || 0);
 
-  // 固定費（支出の固定費）
+  // 固定費（カテゴリで自動判定：住居費・通信費・保険料）
   var fixedExpenses = data.expenses.filter(function (e) {
-    var _e$date2;
-    return ((_e$date2 = e.date) === null || _e$date2 === void 0 ? void 0 : _e$date2.startsWith(month)) && e.isFixed;
+    var _e$date2, _EXPENSE_CATS$find;
+    return ((_e$date2 = e.date) === null || _e$date2 === void 0 ? void 0 : _e$date2.startsWith(month)) && ((_EXPENSE_CATS$find = EXPENSE_CATS.find(function (c) {
+      return c.name === e.category;
+    })) === null || _EXPENSE_CATS$find === void 0 ? void 0 : _EXPENSE_CATS$find.isFixed);
   }).reduce(function (a, e) {
     return a + e.amount;
   }, 0);
@@ -2325,9 +2340,14 @@ function ExpenseAnalysis(_ref24) {
       color: ((_expenseCategories$na2 = expenseCategories[name]) === null || _expenseCategories$na2 === void 0 ? void 0 : _expenseCategories$na2.color) || colors.neutral
     };
   });
+  var isFixedCat = function isFixedCat(cat) {
+    var _EXPENSE_CATS$find2;
+    return ((_EXPENSE_CATS$find2 = EXPENSE_CATS.find(function (c) {
+      return c.name === cat;
+    })) === null || _EXPENSE_CATS$find2 === void 0 ? void 0 : _EXPENSE_CATS$find2.isFixed) || false;
+  };
   var fixedTotal = monthExpenses.filter(function (e) {
-    var _expenseCategories$e$2;
-    return e.isFixed || ((_expenseCategories$e$2 = expenseCategories[e.category]) === null || _expenseCategories$e$2 === void 0 ? void 0 : _expenseCategories$e$2.isFixed);
+    return isFixedCat(e.category);
   }).reduce(function (a, e) {
     return a + e.amount;
   }, 0);

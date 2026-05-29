@@ -95,19 +95,19 @@ const initialState = {
 
 // ===== 支出カテゴリ定義 =====
 const EXPENSE_CATS = [
-  { name: "食費",   color: "#E74C3C" },
-  { name: "住居費", color: "#E67E22" },
-  { name: "光熱費", color: "#F1C40F" },
-  { name: "通信費", color: "#2ECC71" },
-  { name: "交通費", color: "#3498DB" },
-  { name: "保険料", color: "#9B59B6" },
-  { name: "医療費", color: "#E91E63" },
-  { name: "勉強費", color: "#00BCD4" },
-  { name: "雑費",   color: "#795548" },
-  { name: "交際費", color: "#FF9800" },
-  { name: "車関係", color: "#546E7A" },
-  { name: "被服費", color: "#607D8B" },
-  { name: "その他", color: "#95A5A6" },
+  { name: "食費",   color: "#E74C3C", isFixed: false },
+  { name: "住居費", color: "#E67E22", isFixed: true  },
+  { name: "光熱費", color: "#F1C40F", isFixed: false },
+  { name: "通信費", color: "#2ECC71", isFixed: true  },
+  { name: "交通費", color: "#3498DB", isFixed: false },
+  { name: "保険料", color: "#9B59B6", isFixed: true  },
+  { name: "医療費", color: "#E91E63", isFixed: false },
+  { name: "勉強費", color: "#00BCD4", isFixed: false },
+  { name: "雑費",   color: "#795548", isFixed: false },
+  { name: "交際費", color: "#FF9800", isFixed: false },
+  { name: "車関係", color: "#546E7A", isFixed: false },
+  { name: "被服費", color: "#607D8B", isFixed: false },
+  { name: "その他", color: "#95A5A6", isFixed: false },
 ];
 // 後方互換用マップ（分析・ホーム参照）
 const expenseCategories = Object.fromEntries(
@@ -845,9 +845,9 @@ function IncomeTab({ data, updateData }) {
   const netPay = grossPay - totalDed;
   const totalIncome = netPay + (form.bonus || 0) + (form.sideIncome || 0);
 
-  // 固定費（支出の固定費）
+  // 固定費（カテゴリで自動判定：住居費・通信費・保険料）
   const fixedExpenses = data.expenses
-    .filter((e) => e.date?.startsWith(month) && e.isFixed)
+    .filter((e) => e.date?.startsWith(month) && (EXPENSE_CATS.find((c) => c.name === e.category)?.isFixed))
     .reduce((a, e) => a + e.amount, 0);
   // ローン返済合計
   const loanPayments = data.loans.reduce((a, l) => a + l.monthlyPayment, 0);
@@ -1310,7 +1310,8 @@ function ExpenseAnalysis({ data, month, setMonth, monthExpenses }) {
     .sort((a, b) => b[1] - a[1])
     .map(([name, value]) => ({ name, value, color: expenseCategories[name]?.color || colors.neutral }));
 
-  const fixedTotal = monthExpenses.filter((e) => e.isFixed || expenseCategories[e.category]?.isFixed).reduce((a, e) => a + e.amount, 0);
+  const isFixedCat = (cat) => EXPENSE_CATS.find((c) => c.name === cat)?.isFixed || false;
+  const fixedTotal = monthExpenses.filter((e) => isFixedCat(e.category)).reduce((a, e) => a + e.amount, 0);
   const varTotal = monthExpenses.reduce((a, e) => a + e.amount, 0) - fixedTotal;
   const totalAmt = fixedTotal + varTotal;
 
