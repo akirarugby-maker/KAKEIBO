@@ -2267,6 +2267,12 @@ function ExpenseDayDetailWrapper(_ref23) {
       onChange: function onChange(e) {
         return setInputVal(parseNum(e.target.value));
       },
+      onKeyDown: function onKeyDown(e) {
+        if (e.key === "Enter") {
+          e.target.blur();
+          saveAmount();
+        }
+      },
       placeholder: "0",
       autoFocus: true,
       style: {

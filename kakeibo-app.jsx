@@ -1276,6 +1276,7 @@ function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate })
                       type="number" inputMode="numeric"
                       value={inputVal || ""}
                       onChange={(e) => setInputVal(parseNum(e.target.value))}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.target.blur(); saveAmount(); } }}
                       placeholder="0"
                       autoFocus
                       style={{
