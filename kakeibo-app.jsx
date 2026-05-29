@@ -1450,6 +1450,25 @@ function LoanList({ data, updateData, setSubtab, setSelectedLoan, setEditingLoan
   const totalBalance = data.loans.reduce((a, l) => a + l.remainingBalance, 0);
   const totalMonthly = data.loans.reduce((a, l) => a + l.monthlyPayment, 0);
 
+  // n年後の残高を計算（元利均等返済）
+  const balanceAfterMonths = (loan, months) => {
+    const monthlyRate = loan.interestRate / 100 / 12;
+    let bal = loan.remainingBalance;
+    const payment = loan.monthlyPayment;
+    for (let i = 0; i < months && bal > 0; i++) {
+      if (monthlyRate > 0) {
+        const interest = Math.round(bal * monthlyRate);
+        bal = Math.max(0, bal - (payment - interest));
+      } else {
+        bal = Math.max(0, bal - payment);
+      }
+    }
+    return bal;
+  };
+
+  const total5y  = data.loans.reduce((a, l) => a + balanceAfterMonths(l, 60),  0);
+  const total10y = data.loans.reduce((a, l) => a + balanceAfterMonths(l, 120), 0);
+
   const del = (id) => {
     if (window.confirm("このローンを削除しますか？")) {
       updateData((prev) => ({ ...prev, loans: prev.loans.filter((l) => l.id !== id) }));
@@ -1459,19 +1478,77 @@ function LoanList({ data, updateData, setSubtab, setSelectedLoan, setEditingLoan
   return (
     <div>
       {data.loans.length > 0 && (
-        <Card>
-          <SectionHeader title="ローン合計" />
-          <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: 1, backgroundColor: "#FEF3E2", borderRadius: 10, padding: 12, textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: colors.textLight }}>残高合計</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: colors.loan }}>{fmtYen(totalBalance)}</div>
+        <>
+          <Card>
+            <SectionHeader title="ローン合計" />
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1, backgroundColor: "#FEF3E2", borderRadius: 10, padding: 12, textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: colors.textLight }}>残高合計</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: colors.loan }}>{fmtYen(totalBalance)}</div>
+              </div>
+              <div style={{ flex: 1, backgroundColor: "#FEF3E2", borderRadius: 10, padding: 12, textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: colors.textLight }}>月返済合計</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: colors.loan }}>{fmtYen(totalMonthly)}</div>
+              </div>
             </div>
-            <div style={{ flex: 1, backgroundColor: "#FEF3E2", borderRadius: 10, padding: 12, textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: colors.textLight }}>月返済合計</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: colors.loan }}>{fmtYen(totalMonthly)}</div>
+          </Card>
+
+          {/* 残高予測 */}
+          <Card style={{ border: `1.5px solid ${colors.loan}` }}>
+            <SectionHeader title="残高予測" color={colors.loan} />
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              {[
+                { label: "5年後", val: total5y },
+                { label: "10年後", val: total10y },
+              ].map(({ label, val }) => (
+                <div key={label} style={{ flex: 1, backgroundColor: "#FEF3E2", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+                  <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 4 }}>{label}の残高合計</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: val > 0 ? colors.loan : colors.income }}>
+                    {val > 0 ? fmtYen(val) : "完済"}
+                  </div>
+                  {val > 0 && (
+                    <div style={{ fontSize: 11, color: colors.textLight, marginTop: 2 }}>
+                      現在比 {Math.round(val / totalBalance * 100)}%
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          </div>
-        </Card>
+
+            {/* ローン別内訳 */}
+            {data.loans.length > 1 && (
+              <>
+                <Divider />
+                <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 6 }}>ローン別内訳</div>
+                {data.loans.map((loan) => {
+                  const b5  = balanceAfterMonths(loan, 60);
+                  const b10 = balanceAfterMonths(loan, 120);
+                  return (
+                    <div key={loan.id} style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                        {LOAN_TYPE_ICON[loan.type]} {loan.name}
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ flex: 1, backgroundColor: "#FFF8F0", borderRadius: 8, padding: "6px 10px", textAlign: "center" }}>
+                          <div style={{ fontSize: 10, color: colors.textLight }}>5年後</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: b5 > 0 ? colors.loan : colors.income }}>
+                            {b5 > 0 ? fmtYen(b5) : "完済"}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, backgroundColor: "#FFF8F0", borderRadius: 8, padding: "6px 10px", textAlign: "center" }}>
+                          <div style={{ fontSize: 10, color: colors.textLight }}>10年後</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: b10 > 0 ? colors.loan : colors.income }}>
+                            {b10 > 0 ? fmtYen(b10) : "完済"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </Card>
+        </>
       )}
 
       {data.loans.map((loan) => {
