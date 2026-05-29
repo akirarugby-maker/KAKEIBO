@@ -6,8 +6,8 @@
 フェーズ2:  共通コンポーネント・スマホUI  [✅]
 フェーズ3:  ホーム（ダッシュボード）      [✅]
 フェーズ4:  ①収入タブ                   [✅]
-フェーズ5:  ②支出タブ 前半（入力・一覧） [ ]
-フェーズ6:  ②支出タブ 後半（分析・予算） [ ]
+フェーズ5:  ②支出タブ 前半（入力・一覧） [✅]
+フェーズ6:  ②支出タブ 後半（分析・予算） [✅]
 フェーズ7:  ③ローンタブ 前半（登録・一覧）[ ]
 フェーズ8:  ③ローンタブ 後半（返済表・繰上）[ ]
 フェーズ9:  ④資産タブ 銀行・株式・投信   [ ]
@@ -981,11 +981,298 @@ function IncomeTab({ data, updateData }) {
   );
 }
 
+// ===== フェーズ5・6: 支出タブ =====
+
+const PAYMENT_METHODS = ["現金", "クレカ", "電子マネー", "口座振替", "その他"];
+const EXPENSE_SUBTABS = ["入力", "一覧", "分析", "予算"];
+
 function ExpenseTab({ data, updateData }) {
+  const [subtab, setSubtab] = useState("入力");
+  const [month, setMonth] = useState(currentYM());
+
+  const monthExpenses = data.expenses.filter((e) => e.date?.startsWith(month));
+
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ color: colors.text, margin: 0 }}>💳 支出</h2>
-      <p style={{ color: colors.textLight }}>フェーズ5・6で実装予定</p>
+    <div>
+      <PageTitle title="💳 支出" />
+      {/* サブタブ */}
+      <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto" }}>
+        {EXPENSE_SUBTABS.map((t) => (
+          <button key={t} onClick={() => setSubtab(t)} style={{
+            flex: "0 0 auto", padding: "8px 16px",
+            backgroundColor: subtab === t ? colors.expense : "#EEE",
+            color: subtab === t ? "#fff" : colors.text,
+            border: "none", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer",
+          }}>{t}</button>
+        ))}
+      </div>
+
+      <div style={{ padding: "0 16px" }}>
+        {subtab === "入力"  && <ExpenseInput   data={data} updateData={updateData} />}
+        {subtab === "一覧"  && <ExpenseList    data={data} updateData={updateData} month={month} setMonth={setMonth} monthExpenses={monthExpenses} />}
+        {subtab === "分析"  && <ExpenseAnalysis data={data} month={month} setMonth={setMonth} monthExpenses={monthExpenses} />}
+        {subtab === "予算"  && <ExpenseBudget  data={data} updateData={updateData} month={month} setMonth={setMonth} monthExpenses={monthExpenses} />}
+      </div>
+    </div>
+  );
+}
+
+// 支出入力フォーム
+function ExpenseInput({ data, updateData }) {
+  const [form, setForm] = useState({
+    date: todayStr(),
+    amount: 0,
+    category: "食費",
+    subcategory: "",
+    isFixed: false,
+    memo: "",
+    paymentMethod: "現金",
+  });
+  const [added, setAdded] = useState(false);
+
+  const catList = Object.keys(expenseCategories);
+  const subList = expenseCategories[form.category]?.subcategories || [];
+
+  const add = () => {
+    if (!form.amount) return;
+    const newExp = {
+      ...form,
+      id: genId(),
+      amount: Number(form.amount),
+      isFixed: expenseCategories[form.category]?.isFixed || form.isFixed,
+    };
+    updateData((prev) => ({ ...prev, expenses: [...prev.expenses, newExp] }));
+    setForm((f) => ({ ...f, amount: 0, memo: "", subcategory: "" }));
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1500);
+  };
+
+  return (
+    <Card>
+      <SectionHeader title="クイック入力" color={colors.expense} />
+      {/* 日付 */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>日付</label>
+        <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+          style={{ width: "100%", padding: 12, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+      </div>
+      {/* 金額 */}
+      <AmountInput label="金額" value={form.amount} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
+      {/* カテゴリ */}
+      <SelectInput label="カテゴリ" value={form.category}
+        onChange={(v) => setForm((f) => ({ ...f, category: v, subcategory: "" }))}
+        options={catList.map((c) => ({ value: c, label: c }))} />
+      {/* サブカテゴリ */}
+      {subList.length > 0 && (
+        <SelectInput label="サブカテゴリ" value={form.subcategory || subList[0]}
+          onChange={(v) => setForm((f) => ({ ...f, subcategory: v }))}
+          options={subList.map((s) => ({ value: s, label: s }))} />
+      )}
+      {/* 支払方法 */}
+      <SelectInput label="支払方法" value={form.paymentMethod}
+        onChange={(v) => setForm((f) => ({ ...f, paymentMethod: v }))}
+        options={PAYMENT_METHODS} />
+      {/* メモ */}
+      <TextInput label="メモ（任意）" value={form.memo} onChange={(v) => setForm((f) => ({ ...f, memo: v }))} placeholder="メモ" />
+      {/* 固定費チェック */}
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, cursor: "pointer" }}>
+        <input type="checkbox" checked={form.isFixed} onChange={(e) => setForm((f) => ({ ...f, isFixed: e.target.checked }))} />
+        <span style={{ fontSize: 14, color: colors.text }}>固定費として登録</span>
+      </label>
+      <PrimaryButton onClick={add} color={added ? colors.neutral : colors.expense}>
+        {added ? "✅ 追加しました" : "追加する"}
+      </PrimaryButton>
+    </Card>
+  );
+}
+
+// 支出一覧
+function ExpenseList({ data, updateData, month, setMonth, monthExpenses }) {
+  const sorted = [...monthExpenses].sort((a, b) => b.date > a.date ? 1 : -1);
+  const total = monthExpenses.reduce((a, e) => a + e.amount, 0);
+
+  const del = (id) => updateData((prev) => ({ ...prev, expenses: prev.expenses.filter((e) => e.id !== id) }));
+
+  return (
+    <div>
+      <MonthNavigator month={month} setMonth={setMonth} />
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <span style={{ fontSize: 14, color: colors.textLight }}>{month}の合計</span>
+          <span style={{ fontSize: 22, fontWeight: 800, color: colors.expense }}>-{fmtYen(total)}</span>
+        </div>
+      </Card>
+      {sorted.length > 0 ? sorted.map((e) => (
+        <SwipeDeleteItem key={e.id} onDelete={() => del(e.id)}>
+          <div style={{
+            backgroundColor: colors.card, padding: "12px 16px", borderRadius: 10,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                width: 10, height: 10, borderRadius: "50%",
+                backgroundColor: expenseCategories[e.category]?.color || colors.neutral,
+                flexShrink: 0,
+              }} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
+                  {e.category}{e.subcategory ? `・${e.subcategory}` : ""}
+                  {e.isFixed && <Badge label="固定費" bgColor={colors.saving} style={{ marginLeft: 6, fontSize: 10 }} />}
+                </div>
+                <div style={{ fontSize: 11, color: colors.textLight }}>
+                  {e.date}　{e.paymentMethod}{e.memo ? `　${e.memo}` : ""}
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: 16, fontWeight: 700, color: colors.expense }}>-{fmtYen(e.amount)}</span>
+          </div>
+        </SwipeDeleteItem>
+      )) : <EmptyState message="支出データがありません" />}
+    </div>
+  );
+}
+
+// 支出分析
+function ExpenseAnalysis({ data, month, setMonth, monthExpenses }) {
+  const catTotals = {};
+  monthExpenses.forEach((e) => {
+    catTotals[e.category] = (catTotals[e.category] || 0) + e.amount;
+  });
+  const pieData = Object.entries(catTotals)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value]) => ({ name, value, color: expenseCategories[name]?.color || colors.neutral }));
+
+  const fixedTotal = monthExpenses.filter((e) => e.isFixed || expenseCategories[e.category]?.isFixed).reduce((a, e) => a + e.amount, 0);
+  const varTotal = monthExpenses.reduce((a, e) => a + e.amount, 0) - fixedTotal;
+  const totalAmt = fixedTotal + varTotal;
+
+  // 月次支出棒グラフ
+  const barData = (() => {
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const total = data.expenses.filter((e) => e.date?.startsWith(ym)).reduce((a, e) => a + e.amount, 0);
+      months.push({ month: `${d.getMonth() + 1}月`, 支出: total });
+    }
+    return months;
+  })();
+
+  return (
+    <div>
+      <MonthNavigator month={month} setMonth={setMonth} />
+
+      {pieData.length > 0 ? (
+        <>
+          <Card>
+            <SectionHeader title="カテゴリ別内訳" />
+            <ResponsiveContainer width="100%" height={200}>
+              <RechartsPie>
+                <Pie data={pieData} cx="50%" cy="50%" outerRadius={75} dataKey="value" label={({ name, percent }) => percent > 0.05 ? `${name} ${Math.round(percent * 100)}%` : ""} fontSize={10}>
+                  {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <Tooltip formatter={(v) => fmtYen(v)} />
+              </RechartsPie>
+            </ResponsiveContainer>
+            {pieData.map((d) => (
+              <div key={d.name} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: d.color }} />
+                  <span style={{ fontSize: 13 }}>{d.name}</span>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{fmtYen(d.value)}</span>
+              </div>
+            ))}
+          </Card>
+
+          <Card>
+            <SectionHeader title="固定費 vs 変動費" />
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              {[
+                { label: "固定費", val: fixedTotal, color: colors.saving },
+                { label: "変動費", val: varTotal, color: colors.expense },
+              ].map((item) => (
+                <div key={item.label} style={{ flex: 1, backgroundColor: "#F8F8F8", borderRadius: 10, padding: 12, textAlign: "center" }}>
+                  <div style={{ fontSize: 12, color: colors.textLight }}>{item.label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: item.color }}>{fmtYen(item.val)}</div>
+                  <div style={{ fontSize: 11, color: colors.textLight }}>{totalAmt ? Math.round(item.val / totalAmt * 100) : 0}%</div>
+                </div>
+              ))}
+            </div>
+            <ProgressBar value={fixedTotal} max={totalAmt} color={colors.saving} showPercent={false} />
+          </Card>
+        </>
+      ) : <EmptyState message="分析するデータがありません" />}
+
+      <Card>
+        <SectionHeader title="月次支出推移（6ヶ月）" />
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={barData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#EEE" />
+            <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${Math.round(v / 10000)}万`} />
+            <Tooltip formatter={(v) => fmtYen(v)} />
+            <Bar dataKey="支出" fill={colors.expense} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </Card>
+    </div>
+  );
+}
+
+// 予算管理
+function ExpenseBudget({ data, updateData, month, setMonth, monthExpenses }) {
+  const [editing, setEditing] = useState(null);
+  const [editVal, setEditVal] = useState(0);
+
+  const catTotals = {};
+  monthExpenses.forEach((e) => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
+
+  const saveBudget = (cat) => {
+    updateData((prev) => ({ ...prev, budgets: { ...prev.budgets, [cat]: editVal } }));
+    setEditing(null);
+  };
+
+  return (
+    <div>
+      <MonthNavigator month={month} setMonth={setMonth} />
+      <Card>
+        <SectionHeader title="カテゴリ別予算管理" />
+        {Object.keys(expenseCategories).map((cat) => {
+          const budget = data.budgets[cat] || 0;
+          const actual = catTotals[cat] || 0;
+          const over = budget > 0 && actual > budget;
+          return (
+            <div key={cat} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: expenseCategories[cat].color }} />
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{cat}</span>
+                  {over && <span style={{ fontSize: 10, color: colors.expense, fontWeight: 700 }}>⚠️ 超過</span>}
+                </div>
+                {editing === cat ? (
+                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                    <input type="number" inputMode="numeric" value={editVal} onChange={(e) => setEditVal(parseNum(e.target.value))}
+                      style={{ width: 90, padding: "4px 8px", fontSize: 13, border: "1px solid #CCC", borderRadius: 6 }} />
+                    <button onClick={() => saveBudget(cat)} style={{ padding: "4px 8px", backgroundColor: colors.income, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>保存</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setEditing(cat); setEditVal(budget); }}
+                    style={{ fontSize: 12, color: colors.saving, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                    予算: {fmtYen(budget)}
+                  </button>
+                )}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: colors.textLight, marginBottom: 4 }}>
+                <span>実績: {fmtYen(actual)}</span>
+                <span style={{ color: over ? colors.expense : colors.textLight }}>{budget > 0 ? `残: ${fmtYen(budget - actual)}` : "予算未設定"}</span>
+              </div>
+              {budget > 0 && <ProgressBar value={actual} max={budget} color={expenseCategories[cat].color} />}
+            </div>
+          );
+        })}
+      </Card>
     </div>
   );
 }
