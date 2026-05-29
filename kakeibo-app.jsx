@@ -13,8 +13,8 @@
 フェーズ9:  ④資産タブ 銀行・株式・投信   [✅]
 フェーズ10: ④資産タブ NISA・iDeCo       [✅]
 フェーズ11: ④資産タブ 変額年金・総資産   [✅]
-フェーズ12: ⑤シミュ 将来資産・ローン完済 [ ]
-フェーズ13: ⑤シミュ 老後資金・FIRE試算  [ ]
+フェーズ12: ⑤シミュ 将来資産・ローン完済 [✅]
+フェーズ13: ⑤シミュ 老後資金・FIRE試算  [✅]
 フェーズ14: AI機能統合                  [ ]
 フェーズ15: 仕上げ・CSV出力・バックアップ [ ]
 ========================================
@@ -2086,11 +2086,449 @@ function NetWorthTab({ data }) {
   );
 }
 
+// ===== フェーズ12・13: シミュレーションタブ =====
+
+const SIM_SUBTABS = ["将来資産", "ローン完済後", "老後資金", "FIRE試算"];
+
 function SimulationTab({ data, updateData }) {
+  const [subtab, setSubtab] = useState("将来資産");
+
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ color: colors.text, margin: 0 }}>🔮 シミュレーション</h2>
-      <p style={{ color: colors.textLight }}>フェーズ12・13で実装予定</p>
+    <div>
+      <PageTitle title="🔮 シミュレーション" />
+      <div style={{ display: "flex", gap: 6, padding: "0 16px 12px", overflowX: "auto" }}>
+        {SIM_SUBTABS.map((t) => (
+          <button key={t} onClick={() => setSubtab(t)} style={{
+            flex: "0 0 auto", padding: "8px 12px",
+            backgroundColor: subtab === t ? colors.saving : "#EEE",
+            color: subtab === t ? "#fff" : colors.text,
+            border: "none", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>{t}</button>
+        ))}
+      </div>
+      <div style={{ padding: "0 16px" }}>
+        {subtab === "将来資産"   && <FutureAssetSim data={data} />}
+        {subtab === "ローン完済後" && <AfterLoanSim  data={data} />}
+        {subtab === "老後資金"   && <RetirementSim data={data} />}
+        {subtab === "FIRE試算"   && <FireSim       data={data} />}
+      </div>
+    </div>
+  );
+}
+
+// 将来資産シミュレーター
+function FutureAssetSim({ data }) {
+  const totalAsset = (() => {
+    const b = (data.assets.bankAccounts || []).reduce((a, x) => a + x.balance, 0);
+    const i = (data.assets.investments || []).reduce((a, x) => a + x.currentPrice * x.quantity, 0);
+    return b + i + (data.assets.ideco?.currentValue || 0);
+  })();
+
+  const [currentAsset, setCurrentAsset] = useState(totalAsset || 0);
+  const [monthly, setMonthly] = useState(50000);
+  const [rate, setRate] = useState(5);
+  const [years, setYears] = useState(20);
+
+  const calcFuture = (asset, mon, annualRate, yrs) => {
+    const r = annualRate / 100 / 12;
+    let bal = asset;
+    for (let i = 0; i < yrs * 12; i++) {
+      bal = bal * (1 + r) + mon;
+    }
+    return Math.round(bal);
+  };
+
+  const futureTotal = calcFuture(currentAsset, monthly, rate, years);
+  const principal = currentAsset + monthly * 12 * years;
+  const gains = futureTotal - principal;
+
+  // グラフデータ
+  const chartData = Array.from({ length: years + 1 }, (_, i) => {
+    const total = calcFuture(currentAsset, monthly, rate, i);
+    const princ = currentAsset + monthly * 12 * i;
+    return { year: `${i}年`, 元本: princ, 運用益: Math.max(0, total - princ), 合計: total };
+  });
+
+  // 利率別比較表
+  const rateTable = [1, 3, 5, 7].map((r) => ({
+    rate: r,
+    y10: calcFuture(currentAsset, monthly, r, 10),
+    y20: calcFuture(currentAsset, monthly, r, 20),
+    y30: calcFuture(currentAsset, monthly, r, 30),
+  }));
+
+  return (
+    <div>
+      <Card>
+        <SectionHeader title="将来資産シミュレーター" color={colors.saving} />
+        <AmountInput label="現在の資産" value={currentAsset} onChange={setCurrentAsset} />
+        <AmountInput label="月々の積立額" value={monthly} onChange={setMonthly} />
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>年間運用利率: {rate}%</label>
+          <input type="range" min={0} max={10} step={0.5} value={rate} onChange={(e) => setRate(Number(e.target.value))}
+            style={{ width: "100%", accentColor: colors.saving }} />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>積立期間: {years}年</label>
+          <input type="range" min={1} max={40} value={years} onChange={(e) => setYears(Number(e.target.value))}
+            style={{ width: "100%", accentColor: colors.saving }} />
+        </div>
+        <div style={{ backgroundColor: "#EBF5FB", borderRadius: 12, padding: 16, textAlign: "center" }}>
+          <div style={{ fontSize: 13, color: colors.textLight, marginBottom: 4 }}>{years}年後の資産予測</div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: colors.saving }}>{fmtYen(futureTotal)}</div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 8 }}>
+            <div>
+              <div style={{ fontSize: 11, color: colors.textLight }}>元本</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>{fmtYen(principal)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: colors.textLight }}>運用益</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: colors.income }}>+{fmtYen(gains)}</div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <SectionHeader title="資産推移グラフ" />
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#EEE" />
+            <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={Math.floor(years / 5)} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${Math.round(v / 10000)}万`} />
+            <Tooltip formatter={(v) => fmtYen(v)} />
+            <Area type="monotone" dataKey="元本"  stackId="1" stroke={colors.saving} fill="#D6EAF8" />
+            <Area type="monotone" dataKey="運用益" stackId="1" stroke={colors.income} fill="#D5F5E3" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+
+      <Card>
+        <SectionHeader title="利率別比較表" />
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ backgroundColor: "#F5F5F5" }}>
+                {["利率", "10年後", "20年後", "30年後"].map((h) => (
+                  <th key={h} style={{ padding: "8px 6px", textAlign: "right", color: colors.textLight }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rateTable.map((r) => (
+                <tr key={r.rate} style={{ borderBottom: "1px solid #F0F0F0" }}>
+                  <td style={{ padding: "8px 6px", fontWeight: 700, color: colors.saving }}>{r.rate}%</td>
+                  <td style={{ padding: "8px 6px", textAlign: "right" }}>{Math.round(r.y10 / 10000)}万</td>
+                  <td style={{ padding: "8px 6px", textAlign: "right" }}>{Math.round(r.y20 / 10000)}万</td>
+                  <td style={{ padding: "8px 6px", textAlign: "right" }}>{Math.round(r.y30 / 10000)}万</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ローン完済後シミュレーター
+function AfterLoanSim({ data }) {
+  const [rate, setRate] = useState(5);
+
+  const loans = [...data.loans].sort((a, b) => {
+    const aMonths = a.monthlyPayment > 0 ? Math.ceil(a.remainingBalance / a.monthlyPayment) : 999;
+    const bMonths = b.monthlyPayment > 0 ? Math.ceil(b.remainingBalance / b.monthlyPayment) : 999;
+    return aMonths - bMonths;
+  });
+
+  const totalMonthly = loans.reduce((a, l) => a + l.monthlyPayment, 0);
+
+  // 完済シナリオ
+  const scenarios = loans.map((l) => ({
+    name: `${LOAN_TYPE_ICON[l.type]} ${l.name}`,
+    months: l.monthlyPayment > 0 ? Math.ceil(l.remainingBalance / l.monthlyPayment) : 0,
+    monthlyPayment: l.monthlyPayment,
+  }));
+
+  // 完済後に積立回した場合の追加資産
+  const calcAdditional = () => {
+    const now = new Date();
+    // 住宅ローン完済月（最長）を終点とする
+    const maxMonths = scenarios.reduce((m, s) => Math.max(m, s.months), 0);
+    let additionalAsset = 0;
+    const r = rate / 100 / 12;
+
+    scenarios.forEach((s) => {
+      // 完済後の残り期間に積立
+      const remaining = maxMonths - s.months;
+      if (remaining > 0 && s.monthlyPayment > 0) {
+        for (let i = 0; i < remaining; i++) {
+          additionalAsset = additionalAsset * (1 + r) + s.monthlyPayment;
+        }
+      }
+    });
+    return Math.round(additionalAsset);
+  };
+
+  const additionalAsset = calcAdditional();
+
+  return (
+    <div>
+      <Card>
+        <SectionHeader title="現在のローン返済額" color={colors.loan} />
+        <div style={{ fontSize: 24, fontWeight: 800, color: colors.loan, textAlign: "center", marginBottom: 12 }}>
+          {fmtYen(totalMonthly)}<span style={{ fontSize: 14 }}>/月</span>
+        </div>
+        <Divider />
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>完済スケジュール</div>
+        {scenarios.map((s) => {
+          const years = Math.floor(s.months / 12);
+          const months = s.months % 12;
+          const completeDate = new Date();
+          completeDate.setMonth(completeDate.getMonth() + s.months);
+          return (
+            <div key={s.name} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 13 }}>{s.name}</span>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: colors.income }}>
+                  {completeDate.getFullYear()}年{completeDate.getMonth() + 1}月完済
+                </div>
+                <div style={{ fontSize: 11, color: colors.textLight }}>あと{years > 0 ? `${years}年` : ""}{months}ヶ月</div>
+              </div>
+            </div>
+          );
+        })}
+      </Card>
+
+      <Card>
+        <SectionHeader title="完済後に積立に回したら？" color={colors.saving} />
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>運用利率: {rate}%</label>
+          <input type="range" min={0} max={10} step={0.5} value={rate} onChange={(e) => setRate(Number(e.target.value))}
+            style={{ width: "100%", accentColor: colors.saving }} />
+        </div>
+        {scenarios.map((s) => (
+          <div key={s.name} style={{ fontSize: 13, color: colors.textLight, marginBottom: 4 }}>
+            {s.name}完済後: <strong style={{ color: colors.income }}>+{fmtYen(s.monthlyPayment)}/月</strong>を積立
+          </div>
+        ))}
+        <Divider />
+        <div style={{ backgroundColor: "#EBF5FB", borderRadius: 10, padding: 12, textAlign: "center" }}>
+          <div style={{ fontSize: 12, color: colors.textLight }}>全ローン完済後の追加資産（概算）</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: colors.saving }}>{fmtYen(additionalAsset)}</div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// 老後資金シミュレーター
+function RetirementSim({ data }) {
+  const [age, setAge] = useState(35);
+  const [retireAge, setRetireAge] = useState(65);
+  const [lifeAge, setLifeAge] = useState(90);
+  const [pension, setPension] = useState(150000);
+  const [severance, setSeverance] = useState(2000000);
+  const [monthlyLiving, setMonthlyLiving] = useState(250000);
+
+  const retireYears = retireAge - age;
+  const lifeYears = lifeAge - retireAge;
+
+  // 退職後の必要資金
+  const annualExpense = monthlyLiving * 12;
+  const annualPension = pension * 12;
+  const annualShortfall = Math.max(0, annualExpense - annualPension);
+  const totalNeeded = annualShortfall * lifeYears;
+
+  // 現在の準備額
+  const currentSavings = (() => {
+    const b = (data.assets.bankAccounts || []).reduce((a, x) => a + x.balance, 0);
+    const i = (data.assets.investments || []).reduce((a, x) => a + x.currentPrice * x.quantity, 0);
+    return b + i + (data.assets.ideco?.currentValue || 0) + severance;
+  })();
+
+  const shortfall = Math.max(0, totalNeeded - currentSavings);
+
+  return (
+    <div>
+      <Card>
+        <SectionHeader title="老後資金シミュレーター" color="#F39C12" />
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>現在の年齢</label>
+            <input type="number" inputMode="numeric" value={age} onChange={(e) => setAge(Number(e.target.value))}
+              style={{ width: "100%", padding: 10, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>退職予定年齢</label>
+            <input type="number" inputMode="numeric" value={retireAge} onChange={(e) => setRetireAge(Number(e.target.value))}
+              style={{ width: "100%", padding: 10, fontSize: 16, border: "1.5px solid #E0E0E0", borderRadius: 10, boxSizing: "border-box", backgroundColor: "#FAFAFA" }} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>想定寿命: {lifeAge}歳</label>
+          <input type="range" min={70} max={100} value={lifeAge} onChange={(e) => setLifeAge(Number(e.target.value))}
+            style={{ width: "100%", accentColor: "#F39C12" }} />
+        </div>
+        <AmountInput label="年金受取予定額（月額）" value={pension} onChange={setPension} />
+        <AmountInput label="退職金予定額" value={severance} onChange={setSeverance} />
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>老後の月生活費: {fmtYen(monthlyLiving)}</label>
+          <input type="range" min={100000} max={500000} step={10000} value={monthlyLiving} onChange={(e) => setMonthlyLiving(Number(e.target.value))}
+            style={{ width: "100%", accentColor: "#F39C12" }} />
+        </div>
+      </Card>
+
+      <Card style={{ backgroundColor: "#FEF9E7" }}>
+        <SectionHeader title="シミュレーション結果" color="#F39C12" />
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>退職後の期間</span>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{lifeYears}年</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>年間生活費</span>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{fmtYen(annualExpense)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>年金収入</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: colors.income }}>-{fmtYen(annualPension)}</span>
+        </div>
+        <Divider />
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>必要老後資金</span>
+          <span style={{ fontSize: 22, fontWeight: 800, color: "#F39C12" }}>{fmtYen(totalNeeded)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>現在の準備額</span>
+          <span style={{ fontSize: 18, fontWeight: 700, color: colors.income }}>{fmtYen(currentSavings)}</span>
+        </div>
+        <Divider />
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{shortfall > 0 ? "不足額" : "余剰額"}</span>
+          <span style={{ fontSize: 24, fontWeight: 800, color: shortfall > 0 ? colors.expense : colors.income }}>
+            {shortfall > 0 ? "▲" : "+"}{fmtYen(shortfall > 0 ? shortfall : currentSavings - totalNeeded)}
+          </span>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// FIRE試算
+function FireSim({ data }) {
+  const totalAsset = (() => {
+    const b = (data.assets.bankAccounts || []).reduce((a, x) => a + x.balance, 0);
+    const i = (data.assets.investments || []).reduce((a, x) => a + x.currentPrice * x.quantity, 0);
+    return b + i + (data.assets.ideco?.currentValue || 0);
+  })();
+
+  const [currentAsset, setCurrentAsset] = useState(totalAsset || 0);
+  const [monthlyLiving, setMonthlyLiving] = useState(250000);
+  const [withdrawRate, setWithdrawRate] = useState(4);
+  const [monthly, setMonthly] = useState(100000);
+  const [rate, setRate] = useState(5);
+
+  const annualLiving = monthlyLiving * 12;
+  const fireTarget = Math.round(annualLiving / (withdrawRate / 100));
+
+  // FIRE達成までの期間
+  const calcFireYears = () => {
+    const r = rate / 100 / 12;
+    let bal = currentAsset;
+    for (let m = 0; m <= 600; m++) {
+      if (bal >= fireTarget) return { months: m, asset: bal };
+      bal = bal * (1 + r) + monthly;
+    }
+    return { months: -1, asset: bal };
+  };
+
+  const fireResult = calcFireYears();
+  const fireMonths = fireResult.months;
+  const fireYears = Math.floor(fireMonths / 12);
+  const fireRemainingMonths = fireMonths % 12;
+
+  // グラフデータ
+  const chartData = (() => {
+    const r = rate / 100 / 12;
+    let bal = currentAsset;
+    const data = [];
+    for (let y = 0; y <= Math.min(40, Math.ceil(fireMonths / 12) + 5); y++) {
+      data.push({ year: `${y}年`, 資産: Math.round(bal), 目標: fireTarget });
+      for (let m = 0; m < 12; m++) bal = bal * (1 + r) + monthly;
+    }
+    return data;
+  })();
+
+  return (
+    <div>
+      <Card>
+        <SectionHeader title="🔥 FIRE試算" color={colors.expense} />
+        <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 12 }}>
+          FIRE = 年間生活費 ÷ 取り崩し率（4%ルール）
+        </div>
+        <AmountInput label="現在の資産" value={currentAsset} onChange={setCurrentAsset} />
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>月々の生活費: {fmtYen(monthlyLiving)}</label>
+          <input type="range" min={100000} max={500000} step={10000} value={monthlyLiving} onChange={(e) => setMonthlyLiving(Number(e.target.value))}
+            style={{ width: "100%", accentColor: colors.expense }} />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>年間取り崩し率: {withdrawRate}%</label>
+          <input type="range" min={2} max={6} step={0.5} value={withdrawRate} onChange={(e) => setWithdrawRate(Number(e.target.value))}
+            style={{ width: "100%", accentColor: colors.expense }} />
+        </div>
+        <AmountInput label="月々の積立額" value={monthly} onChange={setMonthly} />
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>運用利率: {rate}%</label>
+          <input type="range" min={0} max={10} step={0.5} value={rate} onChange={(e) => setRate(Number(e.target.value))}
+            style={{ width: "100%", accentColor: colors.expense }} />
+        </div>
+      </Card>
+
+      <Card style={{ backgroundColor: "#FFF5F5" }}>
+        <SectionHeader title="FIRE達成シミュレーション" color={colors.expense} />
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, color: colors.textLight }}>年間生活費</span>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{fmtYen(annualLiving)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>FIRE必要資産</span>
+          <span style={{ fontSize: 22, fontWeight: 800, color: colors.expense }}>{fmtYen(fireTarget)}</span>
+        </div>
+        <ProgressBar value={currentAsset} max={fireTarget} color={colors.expense} />
+        <div style={{ fontSize: 12, color: colors.textLight, textAlign: "right", marginTop: 4 }}>
+          達成率 {fireTarget > 0 ? Math.round(currentAsset / fireTarget * 100) : 0}%
+        </div>
+        <Divider />
+        {fireMonths >= 0 ? (
+          <div style={{ textAlign: "center", padding: 12 }}>
+            <div style={{ fontSize: 13, color: colors.textLight }}>FIRE達成まで</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: colors.expense }}>
+              {fireYears > 0 ? `${fireYears}年` : ""}{fireRemainingMonths}ヶ月
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: 12, color: colors.textLight, fontSize: 13 }}>
+            現在の設定ではFIREが困難です。積立額・利率を見直してください。
+          </div>
+        )}
+      </Card>
+
+      {chartData.length > 0 && (
+        <Card>
+          <SectionHeader title="資産推移と目標ライン" />
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#EEE" />
+              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${Math.round(v / 10000)}万`} />
+              <Tooltip formatter={(v) => fmtYen(v)} />
+              <Area type="monotone" dataKey="資産" stroke={colors.saving} fill="#D6EAF8" strokeWidth={2} />
+              <Line type="monotone" dataKey="目標" stroke={colors.expense} strokeWidth={2} strokeDasharray="5 5" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+      )}
     </div>
   );
 }
