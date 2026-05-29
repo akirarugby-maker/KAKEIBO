@@ -56,6 +56,7 @@ var initialState = {
   expenses: [],
   budgets: {
     "食費": 50000,
+    "外食": 20000,
     "住居費": 80000,
     "光熱費": 15000,
     "通信費": 10000,
@@ -102,6 +103,10 @@ var initialState = {
 var EXPENSE_CATS = [{
   name: "食費",
   color: "#E74C3C",
+  isFixed: false
+}, {
+  name: "外食",
+  color: "#C0392B",
   isFixed: false
 }, {
   name: "住居費",
@@ -151,6 +156,21 @@ var EXPENSE_CATS = [{
   name: "その他",
   color: "#95A5A6",
   isFixed: false
+}, {
+  name: "NISA積立",
+  color: "#27AE60",
+  isFixed: true,
+  isInvest: true
+}, {
+  name: "iDeCo",
+  color: "#2980B9",
+  isFixed: true,
+  isInvest: true
+}, {
+  name: "変額年金",
+  color: "#8E44AD",
+  isFixed: true,
+  isInvest: true
 }];
 // 後方互換用マップ（分析・ホーム参照）
 var expenseCategories = Object.fromEntries(EXPENSE_CATS.map(function (c) {
@@ -2309,6 +2329,7 @@ function ExpenseTab(_ref23) {
 
 // ラッパー：日付ナビを正しく扱う
 function ExpenseDayDetailWrapper(_ref24) {
+  var _data$assets$nisa3, _data$assets$ideco3;
   var date = _ref24.date,
     data = _ref24.data,
     updateData = _ref24.updateData,
@@ -2318,8 +2339,6 @@ function ExpenseDayDetailWrapper(_ref24) {
     _useState24 = _slicedToArray(_useState23, 2),
     currentDate = _useState24[0],
     setCurrentDate = _useState24[1];
-
-  // 親からdateが変わった場合は同期
   React.useEffect(function () {
     setCurrentDate(date);
   }, [date]);
@@ -2337,6 +2356,15 @@ function ExpenseDayDetailWrapper(_ref24) {
     _useState28 = _slicedToArray(_useState27, 2),
     inputVal = _useState28[0],
     setInputVal = _useState28[1];
+
+  // 資産管理からの月額参照（投資カテゴリのデフォルト値）
+  var investDefaults = {
+    "NISA積立": ((_data$assets$nisa3 = data.assets.nisa) === null || _data$assets$nisa3 === void 0 ? void 0 : _data$assets$nisa3.monthlyContribution) || 0,
+    "iDeCo": ((_data$assets$ideco3 = data.assets.ideco) === null || _data$assets$ideco3 === void 0 ? void 0 : _data$assets$ideco3.monthlyContribution) || 0,
+    "変額年金": (data.assets.variableAnnuities || []).reduce(function (a, v) {
+      return a + (v.monthlyPremium || 0);
+    }, 0)
+  };
   var _useState29 = useState(false),
     _useState30 = _slicedToArray(_useState29, 2),
     saved = _useState30[0],
@@ -2357,7 +2385,9 @@ function ExpenseDayDetailWrapper(_ref24) {
       return;
     }
     setSelectedCat(name);
-    setInputVal(catTotal(name));
+    // 投資カテゴリで未入力の場合は資産管理の月額をデフォルト表示
+    var existing = catTotal(name);
+    setInputVal(existing > 0 ? existing : investDefaults[name] || 0);
   };
   var saveAmount = function saveAmount() {
     var newAmount = Number(inputVal) || 0;
@@ -2494,6 +2524,8 @@ function ExpenseDayDetailWrapper(_ref24) {
   }, EXPENSE_CATS.map(function (cat) {
     var total = catTotal(cat.name);
     var isOpen = selectedCat === cat.name;
+    var defaultAmt = investDefaults[cat.name] || 0;
+    var accentColor = cat.isInvest ? cat.color : colors.expense;
     return /*#__PURE__*/React.createElement("div", {
       key: cat.name,
       style: {
@@ -2509,8 +2541,8 @@ function ExpenseDayDetailWrapper(_ref24) {
         justifyContent: "space-between",
         padding: "13px 14px",
         borderRadius: isOpen ? "12px 12px 0 0" : 12,
-        backgroundColor: isOpen ? "#FFF0F0" : colors.card,
-        border: "1.5px solid ".concat(isOpen ? colors.expense : "transparent"),
+        backgroundColor: isOpen ? cat.isInvest ? "#F0F8FF" : "#FFF0F0" : colors.card,
+        border: "1.5px solid ".concat(isOpen ? accentColor : "transparent"),
         borderBottom: isOpen ? "none" : undefined,
         cursor: "pointer"
       }
@@ -2528,13 +2560,19 @@ function ExpenseDayDetailWrapper(_ref24) {
         backgroundColor: cat.color,
         flexShrink: 0
       }
-    }), /*#__PURE__*/React.createElement("span", {
+    }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 15,
         fontWeight: 600,
         color: colors.text
       }
-    }, cat.name)), /*#__PURE__*/React.createElement("div", {
+    }, cat.name), cat.isInvest && defaultAmt > 0 && total === 0 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: cat.color,
+        marginLeft: 6
+      }
+    }, "\u8CC7\u7523\u7BA1\u7406: ", fmtYen(defaultAmt), "/\u6708"))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         alignItems: "center",
@@ -2544,7 +2582,7 @@ function ExpenseDayDetailWrapper(_ref24) {
       style: {
         fontSize: 15,
         fontWeight: 700,
-        color: colors.expense
+        color: accentColor
       }
     }, "-", fmtYen(total)), /*#__PURE__*/React.createElement("span", {
       style: {
@@ -2553,10 +2591,10 @@ function ExpenseDayDetailWrapper(_ref24) {
       }
     }, isOpen ? "▲" : "▶"))), isOpen && /*#__PURE__*/React.createElement("div", {
       style: {
-        backgroundColor: "#FFF0F0",
+        backgroundColor: cat.isInvest ? "#F0F8FF" : "#FFF0F0",
         borderRadius: "0 0 12px 12px",
         padding: "12px 14px 14px",
-        border: "1.5px solid ".concat(colors.expense),
+        border: "1.5px solid ".concat(accentColor),
         borderTop: "none"
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -2565,7 +2603,12 @@ function ExpenseDayDetailWrapper(_ref24) {
         color: colors.textLight,
         marginBottom: 8
       }
-    }, "\u91D1\u984D\u3092\u5165\u529B\uFF080\u3067\u524A\u9664\uFF09"), /*#__PURE__*/React.createElement("div", {
+    }, "\u91D1\u984D\u3092\u5165\u529B\uFF080\u3067\u524A\u9664\uFF09", cat.isInvest && defaultAmt > 0 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: cat.color,
+        marginLeft: 6
+      }
+    }, "\u8CC7\u7523\u7BA1\u7406\u306E\u6708\u984D: ", fmtYen(defaultAmt))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         gap: 8
@@ -5287,15 +5330,15 @@ function AnnuityTab(_ref41) {
 
 // 総資産・純資産
 function NetWorthTab(_ref42) {
-  var _data$assets$nisa3, _data$assets$ideco3;
+  var _data$assets$nisa4, _data$assets$ideco4;
   var data = _ref42.data;
   var bankTotal = (data.assets.bankAccounts || []).reduce(function (a, b) {
     return a + b.balance;
   }, 0);
-  var nisaInvest = (((_data$assets$nisa3 = data.assets.nisa) === null || _data$assets$nisa3 === void 0 ? void 0 : _data$assets$nisa3.investments) || []).reduce(function (a, i) {
+  var nisaInvest = (((_data$assets$nisa4 = data.assets.nisa) === null || _data$assets$nisa4 === void 0 ? void 0 : _data$assets$nisa4.investments) || []).reduce(function (a, i) {
     return a + i.currentPrice * i.quantity;
   }, 0);
-  var idecoVal = ((_data$assets$ideco3 = data.assets.ideco) === null || _data$assets$ideco3 === void 0 ? void 0 : _data$assets$ideco3.currentValue) || 0;
+  var idecoVal = ((_data$assets$ideco4 = data.assets.ideco) === null || _data$assets$ideco4 === void 0 ? void 0 : _data$assets$ideco4.currentValue) || 0;
   var annuityVal = (data.assets.variableAnnuities || []).reduce(function (a, v) {
     return a + v.currentValue;
   }, 0);
@@ -5502,14 +5545,14 @@ function SimulationTab(_ref45) {
 // 将来資産シミュレーター
 function FutureAssetSim(_ref46) {
   var data = _ref46.data;
-  var totalAsset = function (_data$assets$nisa4, _data$assets$ideco4) {
+  var totalAsset = function (_data$assets$nisa5, _data$assets$ideco5) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
     }, 0);
-    var i = (((_data$assets$nisa4 = data.assets.nisa) === null || _data$assets$nisa4 === void 0 ? void 0 : _data$assets$nisa4.investments) || []).reduce(function (a, x) {
+    var i = (((_data$assets$nisa5 = data.assets.nisa) === null || _data$assets$nisa5 === void 0 ? void 0 : _data$assets$nisa5.investments) || []).reduce(function (a, x) {
       return a + x.currentPrice * x.quantity;
     }, 0);
-    return b + i + (((_data$assets$ideco4 = data.assets.ideco) === null || _data$assets$ideco4 === void 0 ? void 0 : _data$assets$ideco4.currentValue) || 0);
+    return b + i + (((_data$assets$ideco5 = data.assets.ideco) === null || _data$assets$ideco5 === void 0 ? void 0 : _data$assets$ideco5.currentValue) || 0);
   }();
   var _useState71 = useState(totalAsset || 0),
     _useState72 = _slicedToArray(_useState71, 2),
@@ -5960,14 +6003,14 @@ function RetirementSim(_ref48) {
   var totalNeeded = annualShortfall * lifeYears;
 
   // 現在の準備額
-  var currentSavings = function (_data$assets$nisa5, _data$assets$ideco5) {
+  var currentSavings = function (_data$assets$nisa6, _data$assets$ideco6) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
     }, 0);
-    var i = (((_data$assets$nisa5 = data.assets.nisa) === null || _data$assets$nisa5 === void 0 ? void 0 : _data$assets$nisa5.investments) || []).reduce(function (a, x) {
+    var i = (((_data$assets$nisa6 = data.assets.nisa) === null || _data$assets$nisa6 === void 0 ? void 0 : _data$assets$nisa6.investments) || []).reduce(function (a, x) {
       return a + x.currentPrice * x.quantity;
     }, 0);
-    return b + i + (((_data$assets$ideco5 = data.assets.ideco) === null || _data$assets$ideco5 === void 0 ? void 0 : _data$assets$ideco5.currentValue) || 0) + severance;
+    return b + i + (((_data$assets$ideco6 = data.assets.ideco) === null || _data$assets$ideco6 === void 0 ? void 0 : _data$assets$ideco6.currentValue) || 0) + severance;
   }();
   var shortfall = Math.max(0, totalNeeded - currentSavings);
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
@@ -6200,14 +6243,14 @@ function RetirementSim(_ref48) {
 // FIRE試算
 function FireSim(_ref49) {
   var data = _ref49.data;
-  var totalAsset = function (_data$assets$nisa6, _data$assets$ideco6) {
+  var totalAsset = function (_data$assets$nisa7, _data$assets$ideco7) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
     }, 0);
-    var i = (((_data$assets$nisa6 = data.assets.nisa) === null || _data$assets$nisa6 === void 0 ? void 0 : _data$assets$nisa6.investments) || []).reduce(function (a, x) {
+    var i = (((_data$assets$nisa7 = data.assets.nisa) === null || _data$assets$nisa7 === void 0 ? void 0 : _data$assets$nisa7.investments) || []).reduce(function (a, x) {
       return a + x.currentPrice * x.quantity;
     }, 0);
-    return b + i + (((_data$assets$ideco6 = data.assets.ideco) === null || _data$assets$ideco6 === void 0 ? void 0 : _data$assets$ideco6.currentValue) || 0);
+    return b + i + (((_data$assets$ideco7 = data.assets.ideco) === null || _data$assets$ideco7 === void 0 ? void 0 : _data$assets$ideco7.currentValue) || 0);
   }();
   var _useState93 = useState(totalAsset || 0),
     _useState94 = _slicedToArray(_useState93, 2),

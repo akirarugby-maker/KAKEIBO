@@ -52,19 +52,10 @@ const initialState = {
   salaries: [],
   expenses: [],
   budgets: {
-    "食費": 50000,
-    "住居費": 80000,
-    "光熱費": 15000,
-    "通信費": 10000,
-    "交通費": 20000,
-    "保険料": 30000,
-    "医療費": 10000,
-    "勉強費": 10000,
-    "雑費": 15000,
-    "交際費": 20000,
-    "車関係": 20000,
-    "被服費": 10000,
-    "その他": 10000,
+    "食費": 50000, "外食": 20000, "住居費": 80000, "光熱費": 15000,
+    "通信費": 10000, "交通費": 20000, "保険料": 30000, "医療費": 10000,
+    "勉強費": 10000, "雑費": 15000, "交際費": 20000, "車関係": 20000,
+    "被服費": 10000, "その他": 10000,
   },
   loans: [],
   assets: {
@@ -96,19 +87,23 @@ const initialState = {
 
 // ===== 支出カテゴリ定義 =====
 const EXPENSE_CATS = [
-  { name: "食費",   color: "#E74C3C", isFixed: false },
-  { name: "住居費", color: "#E67E22", isFixed: true  },
-  { name: "光熱費", color: "#F1C40F", isFixed: false },
-  { name: "通信費", color: "#2ECC71", isFixed: true  },
-  { name: "交通費", color: "#3498DB", isFixed: false },
-  { name: "保険料", color: "#9B59B6", isFixed: true  },
-  { name: "医療費", color: "#E91E63", isFixed: false },
-  { name: "勉強費", color: "#00BCD4", isFixed: false },
-  { name: "雑費",   color: "#795548", isFixed: false },
-  { name: "交際費", color: "#FF9800", isFixed: false },
-  { name: "車関係", color: "#546E7A", isFixed: false },
-  { name: "被服費", color: "#607D8B", isFixed: false },
-  { name: "その他", color: "#95A5A6", isFixed: false },
+  { name: "食費",     color: "#E74C3C", isFixed: false },
+  { name: "外食",     color: "#C0392B", isFixed: false },
+  { name: "住居費",   color: "#E67E22", isFixed: true  },
+  { name: "光熱費",   color: "#F1C40F", isFixed: false },
+  { name: "通信費",   color: "#2ECC71", isFixed: true  },
+  { name: "交通費",   color: "#3498DB", isFixed: false },
+  { name: "保険料",   color: "#9B59B6", isFixed: true  },
+  { name: "医療費",   color: "#E91E63", isFixed: false },
+  { name: "勉強費",   color: "#00BCD4", isFixed: false },
+  { name: "雑費",     color: "#795548", isFixed: false },
+  { name: "交際費",   color: "#FF9800", isFixed: false },
+  { name: "車関係",   color: "#546E7A", isFixed: false },
+  { name: "被服費",   color: "#607D8B", isFixed: false },
+  { name: "その他",   color: "#95A5A6", isFixed: false },
+  { name: "NISA積立", color: "#27AE60", isFixed: true, isInvest: true },
+  { name: "iDeCo",   color: "#2980B9", isFixed: true, isInvest: true },
+  { name: "変額年金", color: "#8E44AD", isFixed: true, isInvest: true },
 ];
 // 後方互換用マップ（分析・ホーム参照）
 const expenseCategories = Object.fromEntries(
@@ -1308,13 +1303,19 @@ function ExpenseTab({ data, updateData }) {
 function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate }) {
   const [currentDate, setCurrentDate] = useState(date);
 
-  // 親からdateが変わった場合は同期
   React.useEffect(() => { setCurrentDate(date); }, [date]);
 
   const [y, mm, d] = currentDate.split("-").map(Number);
   const dateLabel = `${y}年${mm}月${d}日`;
   const [selectedCat, setSelectedCat] = useState(null);
   const [inputVal, setInputVal] = useState(0);
+
+  // 資産管理からの月額参照（投資カテゴリのデフォルト値）
+  const investDefaults = {
+    "NISA積立": data.assets.nisa?.monthlyContribution || 0,
+    "iDeCo":   data.assets.ideco?.monthlyContribution || 0,
+    "変額年金": (data.assets.variableAnnuities || []).reduce((a, v) => a + (v.monthlyPremium || 0), 0),
+  };
   const [saved, setSaved] = useState(false);
 
   const dayExps = data.expenses.filter((e) => e.date === currentDate);
@@ -1323,7 +1324,9 @@ function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate })
   const handleCatTap = (name) => {
     if (selectedCat === name) { setSelectedCat(null); return; }
     setSelectedCat(name);
-    setInputVal(catTotal(name));
+    // 投資カテゴリで未入力の場合は資産管理の月額をデフォルト表示
+    const existing = catTotal(name);
+    setInputVal(existing > 0 ? existing : (investDefaults[name] || 0));
   };
 
   const saveAmount = () => {
@@ -1388,34 +1391,47 @@ function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate })
         {EXPENSE_CATS.map((cat) => {
           const total = catTotal(cat.name);
           const isOpen = selectedCat === cat.name;
+          const defaultAmt = investDefaults[cat.name] || 0;
+          const accentColor = cat.isInvest ? cat.color : colors.expense;
           return (
             <div key={cat.name} style={{ marginBottom: 3 }}>
               <div onClick={() => handleCatTap(cat.name)} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "13px 14px", borderRadius: isOpen ? "12px 12px 0 0" : 12,
-                backgroundColor: isOpen ? "#FFF0F0" : colors.card,
-                border: `1.5px solid ${isOpen ? colors.expense : "transparent"}`,
+                backgroundColor: isOpen ? (cat.isInvest ? "#F0F8FF" : "#FFF0F0") : colors.card,
+                border: `1.5px solid ${isOpen ? accentColor : "transparent"}`,
                 borderBottom: isOpen ? "none" : undefined,
                 cursor: "pointer",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: cat.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>{cat.name}</span>
+                  <div>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>{cat.name}</span>
+                    {cat.isInvest && defaultAmt > 0 && total === 0 && (
+                      <span style={{ fontSize: 10, color: cat.color, marginLeft: 6 }}>資産管理: {fmtYen(defaultAmt)}/月</span>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {total > 0 && (
-                    <span style={{ fontSize: 15, fontWeight: 700, color: colors.expense }}>-{fmtYen(total)}</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: accentColor }}>-{fmtYen(total)}</span>
                   )}
                   <span style={{ fontSize: 14, color: colors.textLight }}>{isOpen ? "▲" : "▶"}</span>
                 </div>
               </div>
               {isOpen && (
                 <div style={{
-                  backgroundColor: "#FFF0F0", borderRadius: "0 0 12px 12px",
+                  backgroundColor: cat.isInvest ? "#F0F8FF" : "#FFF0F0",
+                  borderRadius: "0 0 12px 12px",
                   padding: "12px 14px 14px",
-                  border: `1.5px solid ${colors.expense}`, borderTop: "none",
+                  border: `1.5px solid ${accentColor}`, borderTop: "none",
                 }}>
-                  <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 8 }}>金額を入力（0で削除）</div>
+                  <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 8 }}>
+                    金額を入力（0で削除）
+                    {cat.isInvest && defaultAmt > 0 && (
+                      <span style={{ color: cat.color, marginLeft: 6 }}>資産管理の月額: {fmtYen(defaultAmt)}</span>
+                    )}
+                  </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <input
                       type="number" inputMode="numeric"
