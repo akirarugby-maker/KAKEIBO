@@ -746,6 +746,18 @@ function HomeTab({ data, updateData }) {
 
   const [bm_y, bm_m] = baseMonth.split("-").map(Number);
 
+  // 月末リマインダー（25日〜月末に表示）
+  const todayDay = today.getDate();
+  const dismissKey = `kakeibo-asset-reminder-${ym}`;
+  const [reminderDismissed, setReminderDismissed] = useState(
+    () => localStorage.getItem(dismissKey) === "1"
+  );
+  const showReminder = todayDay >= 25 && !reminderDismissed;
+  const dismissReminder = () => {
+    localStorage.setItem(dismissKey, "1");
+    setReminderDismissed(true);
+  };
+
   return (
     <div>
       {/* ページタイトル */}
@@ -755,6 +767,33 @@ function HomeTab({ data, updateData }) {
           {today.getFullYear()}年{today.getMonth() + 1}月
         </span>
       </div>
+
+      {/* 月末リマインダーバナー */}
+      {showReminder && (
+        <div style={{ padding: "0 16px 8px" }}>
+          <div style={{
+            backgroundColor: "#FFF9E6",
+            border: "1.5px solid #F1C40F",
+            borderRadius: 12,
+            padding: "12px 14px",
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+              <span style={{ fontSize: 22 }}>🔔</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#B8860B" }}>資産管理の更新をしましょう</div>
+                <div style={{ fontSize: 11, color: "#8B6914", marginTop: 2 }}>
+                  銀行残高・NISA評価額などを最新の値に更新してください
+                </div>
+              </div>
+            </div>
+            <button onClick={dismissReminder} style={{
+              background: "none", border: "none", fontSize: 18,
+              color: "#B8860B", cursor: "pointer", flexShrink: 0, padding: 4,
+            }}>✕</button>
+          </div>
+        </div>
+      )}
 
       {/* 1. 収支カード（月スライド対応） */}
       <div style={{ padding: "0 16px" }}>
