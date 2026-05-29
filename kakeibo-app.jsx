@@ -1642,7 +1642,10 @@ function AssetTab({ data, updateData }) {
             flex: "0 0 auto", padding: "8px 12px",
             backgroundColor: subtab === t ? colors.asset : "#EEE",
             color: subtab === t ? "#fff" : colors.text,
-            border: "none", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+            border: t === "総資産" ? `2px solid ${colors.asset}` : "2px solid transparent",
+            borderRadius: 20, fontSize: 12,
+            fontWeight: t === "総資産" ? 800 : 600,
+            cursor: "pointer",
           }}>{t}</button>
         ))}
       </div>
