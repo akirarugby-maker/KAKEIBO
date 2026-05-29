@@ -3,7 +3,7 @@
 💰 家計簿アプリ - ビルド進捗
 ========================================
 フェーズ1:  基盤・データ構造・状態管理    [✅]
-フェーズ2:  共通コンポーネント・スマホUI  [ ]
+フェーズ2:  共通コンポーネント・スマホUI  [✅]
 フェーズ3:  ホーム（ダッシュボード）      [ ]
 フェーズ4:  ①収入タブ                   [ ]
 フェーズ5:  ②支出タブ 前半（入力・一覧） [ ]
@@ -259,6 +259,357 @@ function BottomNav({ activeTab, setActiveTab }) {
         );
       })}
     </nav>
+  );
+}
+
+// ===== フェーズ2: 共通コンポーネント =====
+
+// カードコンポーネント
+function Card({ children, style = {} }) {
+  return (
+    <div style={{
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+      padding: 16,
+      marginBottom: 12,
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// セクションヘッダー
+function SectionHeader({ title, color = colors.text, right }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color }}>{title}</h3>
+      {right}
+    </div>
+  );
+}
+
+// 金額入力フィールド
+function AmountInput({ value, onChange, placeholder = "0", label, style = {} }) {
+  return (
+    <div style={{ marginBottom: 12, ...style }}>
+      {label && <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>{label}</label>}
+      <div style={{ position: "relative" }}>
+        <span style={{
+          position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+          color: colors.textLight, fontSize: 16, pointerEvents: "none",
+        }}>¥</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={value || ""}
+          onChange={(e) => onChange(parseNum(e.target.value))}
+          placeholder={placeholder}
+          style={{
+            width: "100%",
+            padding: "12px 12px 12px 28px",
+            fontSize: 16,
+            border: "1.5px solid #E0E0E0",
+            borderRadius: 10,
+            outline: "none",
+            boxSizing: "border-box",
+            backgroundColor: "#FAFAFA",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// テキスト入力フィールド
+function TextInput({ value, onChange, placeholder, label, style = {} }) {
+  return (
+    <div style={{ marginBottom: 12, ...style }}>
+      {label && <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>{label}</label>}
+      <input
+        type="text"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          width: "100%",
+          padding: "12px",
+          fontSize: 16,
+          border: "1.5px solid #E0E0E0",
+          borderRadius: 10,
+          outline: "none",
+          boxSizing: "border-box",
+          backgroundColor: "#FAFAFA",
+        }}
+      />
+    </div>
+  );
+}
+
+// セレクトボックス
+function SelectInput({ value, onChange, options, label, style = {} }) {
+  return (
+    <div style={{ marginBottom: 12, ...style }}>
+      {label && <label style={{ fontSize: 12, color: colors.textLight, display: "block", marginBottom: 4 }}>{label}</label>}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: "100%",
+          padding: "12px",
+          fontSize: 16,
+          border: "1.5px solid #E0E0E0",
+          borderRadius: 10,
+          outline: "none",
+          boxSizing: "border-box",
+          backgroundColor: "#FAFAFA",
+          appearance: "none",
+        }}
+      >
+        {options.map((opt) => (
+          <option key={opt.value ?? opt} value={opt.value ?? opt}>
+            {opt.label ?? opt}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// プライマリボタン
+function PrimaryButton({ children, onClick, color = colors.income, disabled = false, style = {} }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        width: "100%",
+        padding: "14px",
+        backgroundColor: disabled ? colors.neutral : color,
+        color: "#fff",
+        border: "none",
+        borderRadius: 12,
+        fontSize: 16,
+        fontWeight: 700,
+        cursor: disabled ? "not-allowed" : "pointer",
+        minHeight: 44,
+        transition: "opacity 0.2s",
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// アウトラインボタン
+function OutlineButton({ children, onClick, color = colors.saving, style = {} }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "10px 16px",
+        backgroundColor: "transparent",
+        color,
+        border: `2px solid ${color}`,
+        borderRadius: 10,
+        fontSize: 14,
+        fontWeight: 600,
+        cursor: "pointer",
+        minHeight: 44,
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// バッジ
+function Badge({ label, color, bgColor }) {
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 8px",
+      borderRadius: 20,
+      fontSize: 11,
+      fontWeight: 600,
+      color: color || "#fff",
+      backgroundColor: bgColor || colors.neutral,
+    }}>
+      {label}
+    </span>
+  );
+}
+
+// プログレスバー
+function ProgressBar({ value, max, color = colors.saving, showPercent = true }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  const over = max > 0 && value > max;
+  return (
+    <div>
+      <div style={{ height: 10, backgroundColor: "#EEE", borderRadius: 5, overflow: "hidden" }}>
+        <div style={{
+          height: "100%",
+          width: `${pct}%`,
+          backgroundColor: over ? colors.expense : color,
+          borderRadius: 5,
+          transition: "width 0.4s ease",
+        }} />
+      </div>
+      {showPercent && (
+        <div style={{ fontSize: 12, color: over ? colors.expense : colors.textLight, marginTop: 4, textAlign: "right" }}>
+          {Math.round(pct)}%
+          {over && " ⚠️ 超過"}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// モーダル
+function Modal({ title, children, onClose }) {
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.4)", zIndex: 2000,
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }} onClick={onClose}>
+      <div
+        style={{
+          backgroundColor: colors.card,
+          borderRadius: "20px 20px 0 0",
+          padding: 20,
+          paddingBottom: 40,
+          width: "100%",
+          maxWidth: 430,
+          maxHeight: "90vh",
+          overflowY: "auto",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 18, color: colors.text }}>{title}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: colors.textLight }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// アコーディオン
+function Accordion({ title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "12px 16px", backgroundColor: "#F5F5F5", border: "none", borderRadius: 10,
+          cursor: "pointer", fontSize: 14, fontWeight: 600, color: colors.text,
+        }}
+      >
+        {title}
+        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      </button>
+      {open && <div style={{ padding: "12px 4px 0" }}>{children}</div>}
+    </div>
+  );
+}
+
+// 月ナビゲーター
+function MonthNavigator({ month, setMonth }) {
+  const prev = () => {
+    const [y, m] = month.split("-").map(Number);
+    const d = new Date(y, m - 2, 1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  };
+  const next = () => {
+    const [y, m] = month.split("-").map(Number);
+    const d = new Date(y, m, 1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  };
+  const [y, m] = month.split("-");
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 16,
+    }}>
+      <button onClick={prev} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: colors.saving, minWidth: 44, minHeight: 44 }}>‹</button>
+      <span style={{ fontSize: 18, fontWeight: 700, color: colors.text }}>{y}年{parseInt(m, 10)}月</span>
+      <button onClick={next} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: colors.saving, minWidth: 44, minHeight: 44 }}>›</button>
+    </div>
+  );
+}
+
+// サマリー行
+function SummaryRow({ label, value, color = colors.text, large = false }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, marginBottom: 6 }}>
+      <span style={{ fontSize: large ? 15 : 13, color: colors.textLight }}>{label}</span>
+      <span style={{ fontSize: large ? 20 : 15, fontWeight: large ? 700 : 600, color }}>{value}</span>
+    </div>
+  );
+}
+
+// 区切り線
+function Divider() {
+  return <div style={{ height: 1, backgroundColor: "#EEE", margin: "8px 0" }} />;
+}
+
+// スワイプ削除対応リストアイテム
+function SwipeDeleteItem({ onDelete, children }) {
+  const [swiped, setSwiped] = useState(false);
+  const [startX, setStartX] = useState(null);
+
+  const onTouchStart = (e) => setStartX(e.touches[0].clientX);
+  const onTouchEnd = (e) => {
+    if (startX !== null && startX - e.changedTouches[0].clientX > 60) setSwiped(true);
+    else setSwiped(false);
+    setStartX(null);
+  };
+
+  return (
+    <div style={{ position: "relative", overflow: "hidden", borderRadius: 10, marginBottom: 8 }}
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <div style={{ transform: swiped ? "translateX(-72px)" : "translateX(0)", transition: "transform 0.2s" }}>
+        {children}
+      </div>
+      {swiped && (
+        <button
+          onClick={() => { setSwiped(false); onDelete(); }}
+          style={{
+            position: "absolute", right: 0, top: 0, bottom: 0, width: 72,
+            backgroundColor: colors.expense, color: "#fff", border: "none",
+            fontSize: 12, fontWeight: 700, cursor: "pointer",
+          }}
+        >
+          削除
+        </button>
+      )}
+    </div>
+  );
+}
+
+// 空状態表示
+function EmptyState({ message, icon: Icon = AlertCircle }) {
+  return (
+    <div style={{ textAlign: "center", padding: "32px 16px", color: colors.textLight }}>
+      <Icon size={40} style={{ marginBottom: 8, opacity: 0.4 }} />
+      <p style={{ margin: 0, fontSize: 14 }}>{message}</p>
+    </div>
+  );
+}
+
+// ページタイトル
+function PageTitle({ title, subtitle }) {
+  return (
+    <div style={{ padding: "16px 16px 8px" }}>
+      <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: colors.text }}>{title}</h2>
+      {subtitle && <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.textLight }}>{subtitle}</p>}
+    </div>
   );
 }
 
