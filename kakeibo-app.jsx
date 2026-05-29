@@ -171,7 +171,14 @@ const TABS = [
 // ===== メインアプリ =====
 export default function KakeiboApp() {
   const [data, setData] = useState(() => loadData());
-  const [activeTab, setActiveTab] = useState("home");
+  const [activeTab, setActiveTab] = useState(
+    () => localStorage.getItem("kakeibo-active-tab") || "home"
+  );
+
+  const handleSetActiveTab = (tab) => {
+    localStorage.setItem("kakeibo-active-tab", tab);
+    setActiveTab(tab);
+  };
 
   // データ更新と自動保存
   const updateData = useCallback((updater) => {
@@ -210,7 +217,7 @@ export default function KakeiboApp() {
       </div>
 
       {/* ボトムナビゲーション */}
-      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      <BottomNav activeTab={activeTab} setActiveTab={handleSetActiveTab} />
     </div>
   );
 }

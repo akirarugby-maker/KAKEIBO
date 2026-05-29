@@ -262,10 +262,16 @@ function KakeiboApp() {
     _useState2 = _slicedToArray(_useState, 2),
     data = _useState2[0],
     setData = _useState2[1];
-  var _useState3 = useState("home"),
+  var _useState3 = useState(function () {
+      return localStorage.getItem("kakeibo-active-tab") || "home";
+    }),
     _useState4 = _slicedToArray(_useState3, 2),
     activeTab = _useState4[0],
     setActiveTab = _useState4[1];
+  var handleSetActiveTab = function handleSetActiveTab(tab) {
+    localStorage.setItem("kakeibo-active-tab", tab);
+    setActiveTab(tab);
+  };
 
   // データ更新と自動保存
   var updateData = useCallback(function (updater) {
@@ -328,7 +334,7 @@ function KakeiboApp() {
     }
   }, renderTab()), /*#__PURE__*/React.createElement(BottomNav, {
     activeTab: activeTab,
-    setActiveTab: setActiveTab
+    setActiveTab: handleSetActiveTab
   }));
 }
 
