@@ -1044,7 +1044,7 @@ function HomeTab(_ref16) {
   var totalDeductions = thisSalary ? Object.values(thisSalary.deductions || {}).reduce(function (a, b) {
     return a + b;
   }, 0) : 0;
-  var netIncome = grossIncome - totalDeductions + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.bonus) || 0) + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.sideIncome) || 0);
+  var netIncome = grossIncome - totalDeductions + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.bonus) || 0) + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.spouseIncome) || 0) + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.sideIncome) || 0);
 
   // 今月の支出
   var monthExpenses = data.expenses.filter(function (e) {
@@ -1081,7 +1081,7 @@ function HomeTab(_ref16) {
     return a + b;
   }, 0) - Object.values(prevSalary.deductions || {}).reduce(function (a, b) {
     return a + b;
-  }, 0) + (prevSalary.bonus || 0) + (prevSalary.sideIncome || 0) : netIncome;
+  }, 0) + (prevSalary.bonus || 0) + (prevSalary.spouseIncome || 0) + (prevSalary.sideIncome || 0) : netIncome;
   var prevExpense = data.expenses.filter(function (e) {
     var _e$date2;
     return (_e$date2 = e.date) === null || _e$date2 === void 0 ? void 0 : _e$date2.startsWith(prevMonth);
@@ -1178,7 +1178,7 @@ function HomeTab(_ref16) {
   var cardDed = cardSalary ? Object.values(cardSalary.deductions || {}).reduce(function (a, b) {
     return a + b;
   }, 0) : 0;
-  var cardNet = cardGross - cardDed + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.bonus) || 0) + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.sideIncome) || 0);
+  var cardNet = cardGross - cardDed + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.bonus) || 0) + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.spouseIncome) || 0) + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.sideIncome) || 0);
   var cardExpense = data.expenses.filter(function (e) {
     var _e$date3;
     return (_e$date3 = e.date) === null || _e$date3 === void 0 ? void 0 : _e$date3.startsWith(cardMonth);
@@ -1731,6 +1731,7 @@ var blankSalary = function blankSalary() {
       other: 0
     },
     bonus: 0,
+    spouseIncome: 0,
     sideIncome: 0,
     memo: ""
   };
@@ -1808,7 +1809,7 @@ function IncomeTab(_ref21) {
     return a + b;
   }, 0);
   var netPay = grossPay - totalDed;
-  var totalIncome = netPay + (form.bonus || 0) + (form.sideIncome || 0);
+  var totalIncome = netPay + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
 
   // 固定費（カテゴリで自動判定：住居費・通信費・保険料）
   var fixedExpenses = data.expenses.filter(function (e) {
@@ -1861,8 +1862,9 @@ function IncomeTab(_ref21) {
       }, 0) : 0;
       months.push({
         month: "".concat(d.getMonth() + 1, "\u6708"),
-        手取り: Math.max(0, basic + ((s === null || s === void 0 ? void 0 : s.bonus) || 0) + ((s === null || s === void 0 ? void 0 : s.sideIncome) || 0)),
+        手取り: Math.max(0, basic + ((s === null || s === void 0 ? void 0 : s.bonus) || 0) + ((s === null || s === void 0 ? void 0 : s.spouseIncome) || 0) + ((s === null || s === void 0 ? void 0 : s.sideIncome) || 0)),
         基本給: Math.max(0, basic),
+        配偶者収入: (s === null || s === void 0 ? void 0 : s.spouseIncome) || 0,
         ボーナス: (s === null || s === void 0 ? void 0 : s.bonus) || 0,
         副収入: (s === null || s === void 0 ? void 0 : s.sideIncome) || 0
       });
@@ -2002,7 +2004,17 @@ function IncomeTab(_ref21) {
       color: colors.income
     }
   }, fmtYen(netPay)))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
-    title: "\u30DC\u30FC\u30CA\u30B9\u30FB\u526F\u53CE\u5165"
+    title: "\u914D\u5076\u8005\u53CE\u5165\u30FB\u30DC\u30FC\u30CA\u30B9\u30FB\u526F\u53CE\u5165"
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u914D\u5076\u8005\u53CE\u5165\uFF08\u624B\u53D6\u308A\uFF09",
+    value: form.spouseIncome,
+    onChange: function onChange(v) {
+      return setForm(function (f) {
+        return _objectSpread(_objectSpread({}, f), {}, {
+          spouseIncome: v
+        });
+      });
+    }
   }), /*#__PURE__*/React.createElement(AmountInput, {
     label: "\u30DC\u30FC\u30CA\u30B9",
     value: form.bonus,

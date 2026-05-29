@@ -680,7 +680,7 @@ function HomeTab({ data, updateData }) {
   const totalDeductions = thisSalary
     ? Object.values(thisSalary.deductions || {}).reduce((a, b) => a + b, 0)
     : 0;
-  const netIncome = grossIncome - totalDeductions + (thisSalary?.bonus || 0) + (thisSalary?.sideIncome || 0);
+  const netIncome = grossIncome - totalDeductions + (thisSalary?.bonus || 0) + (thisSalary?.spouseIncome || 0) + (thisSalary?.sideIncome || 0);
 
   // 今月の支出
   const monthExpenses = data.expenses.filter((e) => e.date?.startsWith(ym));
@@ -702,7 +702,7 @@ function HomeTab({ data, updateData }) {
     ? prevSalary.basicSalary
       + Object.values(prevSalary.allowances || {}).reduce((a, b) => a + b, 0)
       - Object.values(prevSalary.deductions || {}).reduce((a, b) => a + b, 0)
-      + (prevSalary.bonus || 0) + (prevSalary.sideIncome || 0)
+      + (prevSalary.bonus || 0) + (prevSalary.spouseIncome || 0) + (prevSalary.sideIncome || 0)
     : netIncome;
   const prevExpense = data.expenses
     .filter((e) => e.date?.startsWith(prevMonth))
@@ -769,7 +769,7 @@ function HomeTab({ data, updateData }) {
   const cardDed = cardSalary
     ? Object.values(cardSalary.deductions || {}).reduce((a, b) => a + b, 0)
     : 0;
-  const cardNet = cardGross - cardDed + (cardSalary?.bonus || 0) + (cardSalary?.sideIncome || 0);
+  const cardNet = cardGross - cardDed + (cardSalary?.bonus || 0) + (cardSalary?.spouseIncome || 0) + (cardSalary?.sideIncome || 0);
   const cardExpense = data.expenses.filter((e) => e.date?.startsWith(cardMonth)).reduce((a, e) => a + e.amount, 0);
   const cardBalance = cardNet - cardExpense;
 
@@ -1032,6 +1032,7 @@ const blankSalary = () => ({
   allowances: { commuting: 0, housing: 0, overtime: 0, family: 0, other: 0 },
   deductions: { healthInsurance: 0, nursingInsurance: 0, pension: 0, employmentInsurance: 0, incomeTax: 0, residentTax: 0, other: 0 },
   bonus: 0,
+  spouseIncome: 0,
   sideIncome: 0,
   memo: "",
 });
@@ -1068,7 +1069,7 @@ function IncomeTab({ data, updateData }) {
   const grossPay = form.basicSalary + Object.values(form.allowances).reduce((a, b) => a + b, 0);
   const totalDed = Object.values(form.deductions).reduce((a, b) => a + b, 0);
   const netPay = grossPay - totalDed;
-  const totalIncome = netPay + (form.bonus || 0) + (form.sideIncome || 0);
+  const totalIncome = netPay + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
 
   // 固定費（カテゴリで自動判定：住居費・通信費・保険料）
   const fixedExpenses = data.expenses
@@ -1101,8 +1102,9 @@ function IncomeTab({ data, updateData }) {
       const basic = s ? (s.basicSalary - Object.values(s.deductions || {}).reduce((a, b) => a + b, 0)) : 0;
       months.push({
         month: `${d.getMonth() + 1}月`,
-        手取り: Math.max(0, basic + (s?.bonus || 0) + (s?.sideIncome || 0)),
+        手取り: Math.max(0, basic + (s?.bonus || 0) + (s?.spouseIncome || 0) + (s?.sideIncome || 0)),
         基本給: Math.max(0, basic),
+        配偶者収入: s?.spouseIncome || 0,
         ボーナス: s?.bonus || 0,
         副収入: s?.sideIncome || 0,
       });
@@ -1159,9 +1161,10 @@ function IncomeTab({ data, updateData }) {
           </div>
         </Card>
 
-        {/* ボーナス・副収入 */}
+        {/* 配偶者収入・ボーナス・副収入 */}
         <Card>
-          <SectionHeader title="ボーナス・副収入" />
+          <SectionHeader title="配偶者収入・ボーナス・副収入" />
+          <AmountInput label="配偶者収入（手取り）" value={form.spouseIncome} onChange={(v) => setForm((f) => ({ ...f, spouseIncome: v }))} />
           <AmountInput label="ボーナス" value={form.bonus} onChange={(v) => setForm((f) => ({ ...f, bonus: v }))} />
           <AmountInput label="副収入" value={form.sideIncome} onChange={(v) => setForm((f) => ({ ...f, sideIncome: v }))} />
           <TextInput label="メモ" value={form.memo} onChange={(v) => setForm((f) => ({ ...f, memo: v }))} placeholder="メモ（任意）" />
