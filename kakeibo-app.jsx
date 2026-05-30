@@ -52,6 +52,7 @@ const initialState = {
   salaries: [],
   expenses: [],
   futurePlans: [],
+  futureIncomes: [],
   customCats: [],
   budgets: {
     "食費": 50000, "外食": 20000, "住居費": 80000, "マンション管理費等": 20000,
@@ -756,7 +757,10 @@ function HomeTab({ data, updateData }) {
     const planCost = (data.futurePlans || [])
       .filter((p) => (p.years || 0) <= years)
       .reduce((a, p) => a + (p.amount || 0), 0);
-    const futureAsset    = totalAsset + monthlyBalance * months + totalMonthlyInvest * months - planCost;
+    const incomeGain = (data.futureIncomes || [])
+      .filter((p) => (p.years || 0) <= years)
+      .reduce((a, p) => a + (p.amount || 0), 0);
+    const futureAsset    = totalAsset + monthlyBalance * months + totalMonthlyInvest * months - planCost + incomeGain;
     const futureLoan     = loanAfterMonths(months);
     const futureNetWorth = futureAsset - futureLoan;
     return { years, futureAsset, futureLoan, futureNetWorth };
@@ -1061,6 +1065,7 @@ const blankSalary = () => ({
 });
 
 function IncomeTab({ data, updateData }) {
+  const [incSubtab, setIncSubtab] = useState("毎月収入");
   const [month, setMonth] = useState(currentYM());
   const existing = data.salaries.find((s) => s.month === month);
   const [form, setForm] = useState(existing || blankSalary());
@@ -1138,6 +1143,20 @@ function IncomeTab({ data, updateData }) {
   return (
     <div>
       <PageTitle title="💴 収入" subtitle="給与明細を入力してください" />
+
+      {/* サブタブ */}
+      <div style={{ display: "flex", padding: "0 16px 8px", gap: 6 }}>
+        {["毎月収入", "将来の収入"].map((t) => (
+          <button key={t} onClick={() => setIncSubtab(t)} style={{
+            flex: 1, padding: "8px 4px", borderRadius: 10, border: "none", cursor: "pointer",
+            fontSize: 13, fontWeight: 700,
+            backgroundColor: incSubtab === t ? colors.income : "#EEE",
+            color: incSubtab === t ? "#fff" : colors.text,
+          }}>{t}</button>
+        ))}
+      </div>
+
+      {incSubtab === "将来の収入" ? <FutureIncomeTab data={data} updateData={updateData} /> : (
       <div style={{ padding: "0 16px" }}>
         <MonthNavigator month={month} setMonth={setMonth} />
 
@@ -1238,6 +1257,160 @@ function IncomeTab({ data, updateData }) {
           </ResponsiveContainer>
         </Card>
       </div>
+      )}
+    </div>
+  );
+}
+
+// ===== 将来の収入タブ =====
+const FUTURE_INCOME_TYPES = [
+  { type: "retirement",  label: "💼 退職金",       color: "#1565C0" },
+  { type: "insurance",   label: "🛡 生命保険満期金", color: "#27AE60" },
+  { type: "inheritance", label: "🏛 相続",          color: "#8E44AD" },
+  { type: "pension",     label: "🧓 年金（一時金）", color: "#E67E22" },
+  { type: "property",   label: "🏠 不動産売却",    color: "#E74C3C" },
+  { type: "other",      label: "🎁 その他",        color: "#607D8B" },
+];
+
+function FutureIncomeTab({ data, updateData }) {
+  const plans = data.futureIncomes || [];
+  const blankForm = () => ({ id: null, type: "retirement", label: "", years: "", amount: "", memo: "" });
+  const [form, setForm] = useState(blankForm());
+  const [editing, setEditing] = useState(false);
+
+  const F = (field) => (val) => setForm((f) => ({ ...f, [field]: val }));
+
+  const save = () => {
+    if (!form.years || !form.amount) return;
+    const entry = {
+      ...form,
+      id: form.id || genId(),
+      years: Number(form.years),
+      amount: Number(form.amount),
+    };
+    updateData((prev) => {
+      const list = prev.futureIncomes || [];
+      return {
+        ...prev,
+        futureIncomes: form.id ? list.map((p) => p.id === form.id ? entry : p) : [...list, entry],
+      };
+    });
+    setForm(blankForm());
+    setEditing(false);
+  };
+
+  const del = (id) => updateData((prev) => ({ ...prev, futureIncomes: (prev.futureIncomes || []).filter((p) => p.id !== id) }));
+
+  const startEdit = (p) => { setForm({ ...p }); setEditing(true); };
+
+  const sorted = [...plans].sort((a, b) => a.years - b.years);
+  const typeInfo = (t) => FUTURE_INCOME_TYPES.find((x) => x.type === t) || FUTURE_INCOME_TYPES[5];
+
+  return (
+    <div style={{ padding: "0 16px" }}>
+      {/* 入力フォーム */}
+      <Card>
+        <SectionHeader title={editing ? "✏️ 将来の収入を編集" : "＋ 将来の収入を追加"} color={colors.income} />
+        <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 10 }}>
+          退職金・保険満期金・相続など、将来受け取る予定の一時的な収入を登録します
+        </div>
+        {/* 種別ボタン */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+          {FUTURE_INCOME_TYPES.map((t) => (
+            <button key={t.type} onClick={() => setForm((f) => ({ ...f, type: t.type }))} style={{
+              padding: "6px 10px", borderRadius: 20, border: "none", cursor: "pointer",
+              fontSize: 12, fontWeight: 700,
+              backgroundColor: form.type === t.type ? t.color : "#EEE",
+              color: form.type === t.type ? "#fff" : colors.text,
+            }}>{t.label}</button>
+          ))}
+        </div>
+        <TextInput label="名称（任意）" value={form.label} onChange={F("label")} placeholder={typeInfo(form.type).label} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 4 }}>何年後</div>
+            <input
+              type="number" inputMode="numeric" value={form.years}
+              onChange={(e) => setForm((f) => ({ ...f, years: e.target.value }))}
+              placeholder="例: 20"
+              style={{ width: "100%", padding: "10px 12px", fontSize: 15, border: "1.5px solid #DDD", borderRadius: 10, boxSizing: "border-box" }}
+            />
+          </div>
+          <div style={{ flex: 2 }}>
+            <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 4 }}>金額（円）</div>
+            <input
+              type="number" inputMode="numeric" value={form.amount}
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+              placeholder="例: 3000000"
+              style={{ width: "100%", padding: "10px 12px", fontSize: 15, border: "1.5px solid #DDD", borderRadius: 10, boxSizing: "border-box" }}
+            />
+          </div>
+        </div>
+        <TextInput label="メモ（任意）" value={form.memo} onChange={F("memo")} placeholder="補足・条件など" />
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <PrimaryButton onClick={save} color={colors.income} style={{ flex: 1 }}>
+            {editing ? "更新する" : "追加する"}
+          </PrimaryButton>
+          {editing && (
+            <OutlineButton onClick={() => { setForm(blankForm()); setEditing(false); }} color={colors.neutral} style={{ flex: 1 }}>
+              キャンセル
+            </OutlineButton>
+          )}
+        </div>
+      </Card>
+
+      {/* 一覧 */}
+      {sorted.length === 0 ? (
+        <EmptyState message="将来の収入がまだ登録されていません" />
+      ) : (
+        <Card>
+          <SectionHeader title="登録済みの将来収入" />
+          {sorted.map((p) => {
+            const info = typeInfo(p.type);
+            const displayLabel = p.label || info.label;
+            const nowYear = new Date().getFullYear();
+            return (
+              <div key={p.id} style={{
+                padding: "12px 14px", borderRadius: 12, marginBottom: 8,
+                border: `1.5px solid ${info.color}20`, backgroundColor: `${info.color}08`,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: info.color, backgroundColor: `${info.color}20`, padding: "2px 8px", borderRadius: 20 }}>
+                        {info.label}
+                      </span>
+                      <span style={{ fontSize: 12, color: colors.textLight }}>
+                        {p.years}年後（{nowYear + p.years}年）
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>{displayLabel}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: info.color, marginTop: 2 }}>{fmtYen(p.amount)}</div>
+                    {p.memo && <div style={{ fontSize: 11, color: colors.textLight, marginTop: 4 }}>{p.memo}</div>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => startEdit(p)} style={{
+                      padding: "6px 10px", backgroundColor: "#EEE", border: "none",
+                      borderRadius: 8, fontSize: 12, cursor: "pointer",
+                    }}>編集</button>
+                    <button onClick={() => del(p.id)} style={{
+                      padding: "6px 10px", backgroundColor: "#FFEBEE", color: "#E74C3C",
+                      border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer",
+                    }}>削除</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <Divider />
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 13, color: colors.textLight }}>合計予定受取額</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: colors.income }}>
+              {fmtYen(sorted.reduce((a, p) => a + p.amount, 0))}
+            </span>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

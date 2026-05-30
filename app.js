@@ -55,6 +55,7 @@ var initialState = {
   salaries: [],
   expenses: [],
   futurePlans: [],
+  futureIncomes: [],
   customCats: [],
   budgets: {
     "食費": 50000,
@@ -1199,7 +1200,12 @@ function HomeTab(_ref16) {
     }).reduce(function (a, p) {
       return a + (p.amount || 0);
     }, 0);
-    var futureAsset = totalAsset + monthlyBalance * months + totalMonthlyInvest * months - planCost;
+    var incomeGain = (data.futureIncomes || []).filter(function (p) {
+      return (p.years || 0) <= years;
+    }).reduce(function (a, p) {
+      return a + (p.amount || 0);
+    }, 0);
+    var futureAsset = totalAsset + monthlyBalance * months + totalMonthlyInvest * months - planCost + incomeGain;
     var futureLoan = loanAfterMonths(months);
     var futureNetWorth = futureAsset - futureLoan;
     return {
@@ -1819,21 +1825,25 @@ var blankSalary = function blankSalary() {
 function IncomeTab(_ref21) {
   var data = _ref21.data,
     updateData = _ref21.updateData;
-  var _useState13 = useState(currentYM()),
+  var _useState13 = useState("毎月収入"),
     _useState14 = _slicedToArray(_useState13, 2),
-    month = _useState14[0],
-    setMonth = _useState14[1];
+    incSubtab = _useState14[0],
+    setIncSubtab = _useState14[1];
+  var _useState15 = useState(currentYM()),
+    _useState16 = _slicedToArray(_useState15, 2),
+    month = _useState16[0],
+    setMonth = _useState16[1];
   var existing = data.salaries.find(function (s) {
     return s.month === month;
   });
-  var _useState15 = useState(existing || blankSalary()),
-    _useState16 = _slicedToArray(_useState15, 2),
-    form = _useState16[0],
-    setForm = _useState16[1];
-  var _useState17 = useState(false),
+  var _useState17 = useState(existing || blankSalary()),
     _useState18 = _slicedToArray(_useState17, 2),
-    saved = _useState18[0],
-    setSaved = _useState18[1];
+    form = _useState18[0],
+    setForm = _useState18[1];
+  var _useState19 = useState(false),
+    _useState20 = _slicedToArray(_useState19, 2),
+    saved = _useState20[0],
+    setSaved = _useState20[1];
   useEffect(function () {
     var e = data.salaries.find(function (s) {
       return s.month === month;
@@ -1958,6 +1968,33 @@ function IncomeTab(_ref21) {
     title: "\uD83D\uDCB4 \u53CE\u5165",
     subtitle: "\u7D66\u4E0E\u660E\u7D30\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044"
   }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      padding: "0 16px 8px",
+      gap: 6
+    }
+  }, ["毎月収入", "将来の収入"].map(function (t) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: t,
+      onClick: function onClick() {
+        return setIncSubtab(t);
+      },
+      style: {
+        flex: 1,
+        padding: "8px 4px",
+        borderRadius: 10,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 13,
+        fontWeight: 700,
+        backgroundColor: incSubtab === t ? colors.income : "#EEE",
+        color: incSubtab === t ? "#fff" : colors.text
+      }
+    }, t);
+  })), incSubtab === "将来の収入" ? /*#__PURE__*/React.createElement(FutureIncomeTab, {
+    data: data,
+    updateData: updateData
+  }) : /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "0 16px"
     }
@@ -2246,6 +2283,357 @@ function IncomeTab(_ref21) {
   }))))));
 }
 
+// ===== 将来の収入タブ =====
+var FUTURE_INCOME_TYPES = [{
+  type: "retirement",
+  label: "💼 退職金",
+  color: "#1565C0"
+}, {
+  type: "insurance",
+  label: "🛡 生命保険満期金",
+  color: "#27AE60"
+}, {
+  type: "inheritance",
+  label: "🏛 相続",
+  color: "#8E44AD"
+}, {
+  type: "pension",
+  label: "🧓 年金（一時金）",
+  color: "#E67E22"
+}, {
+  type: "property",
+  label: "🏠 不動産売却",
+  color: "#E74C3C"
+}, {
+  type: "other",
+  label: "🎁 その他",
+  color: "#607D8B"
+}];
+function FutureIncomeTab(_ref22) {
+  var data = _ref22.data,
+    updateData = _ref22.updateData;
+  var plans = data.futureIncomes || [];
+  var blankForm = function blankForm() {
+    return {
+      id: null,
+      type: "retirement",
+      label: "",
+      years: "",
+      amount: "",
+      memo: ""
+    };
+  };
+  var _useState21 = useState(blankForm()),
+    _useState22 = _slicedToArray(_useState21, 2),
+    form = _useState22[0],
+    setForm = _useState22[1];
+  var _useState23 = useState(false),
+    _useState24 = _slicedToArray(_useState23, 2),
+    editing = _useState24[0],
+    setEditing = _useState24[1];
+  var F = function F(field) {
+    return function (val) {
+      return setForm(function (f) {
+        return _objectSpread(_objectSpread({}, f), {}, _defineProperty({}, field, val));
+      });
+    };
+  };
+  var save = function save() {
+    if (!form.years || !form.amount) return;
+    var entry = _objectSpread(_objectSpread({}, form), {}, {
+      id: form.id || genId(),
+      years: Number(form.years),
+      amount: Number(form.amount)
+    });
+    updateData(function (prev) {
+      var list = prev.futureIncomes || [];
+      return _objectSpread(_objectSpread({}, prev), {}, {
+        futureIncomes: form.id ? list.map(function (p) {
+          return p.id === form.id ? entry : p;
+        }) : [].concat(_toConsumableArray(list), [entry])
+      });
+    });
+    setForm(blankForm());
+    setEditing(false);
+  };
+  var del = function del(id) {
+    return updateData(function (prev) {
+      return _objectSpread(_objectSpread({}, prev), {}, {
+        futureIncomes: (prev.futureIncomes || []).filter(function (p) {
+          return p.id !== id;
+        })
+      });
+    });
+  };
+  var startEdit = function startEdit(p) {
+    setForm(_objectSpread({}, p));
+    setEditing(true);
+  };
+  var sorted = _toConsumableArray(plans).sort(function (a, b) {
+    return a.years - b.years;
+  });
+  var typeInfo = function typeInfo(t) {
+    return FUTURE_INCOME_TYPES.find(function (x) {
+      return x.type === t;
+    }) || FUTURE_INCOME_TYPES[5];
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 16px"
+    }
+  }, /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: editing ? "✏️ 将来の収入を編集" : "＋ 将来の収入を追加",
+    color: colors.income
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: colors.textLight,
+      marginBottom: 10
+    }
+  }, "\u9000\u8077\u91D1\u30FB\u4FDD\u967A\u6E80\u671F\u91D1\u30FB\u76F8\u7D9A\u306A\u3069\u3001\u5C06\u6765\u53D7\u3051\u53D6\u308B\u4E88\u5B9A\u306E\u4E00\u6642\u7684\u306A\u53CE\u5165\u3092\u767B\u9332\u3057\u307E\u3059"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6,
+      marginBottom: 12
+    }
+  }, FUTURE_INCOME_TYPES.map(function (t) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: t.type,
+      onClick: function onClick() {
+        return setForm(function (f) {
+          return _objectSpread(_objectSpread({}, f), {}, {
+            type: t.type
+          });
+        });
+      },
+      style: {
+        padding: "6px 10px",
+        borderRadius: 20,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 700,
+        backgroundColor: form.type === t.type ? t.color : "#EEE",
+        color: form.type === t.type ? "#fff" : colors.text
+      }
+    }, t.label);
+  })), /*#__PURE__*/React.createElement(TextInput, {
+    label: "\u540D\u79F0\uFF08\u4EFB\u610F\uFF09",
+    value: form.label,
+    onChange: F("label"),
+    placeholder: typeInfo(form.type).label
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: colors.textLight,
+      marginBottom: 4
+    }
+  }, "\u4F55\u5E74\u5F8C"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "numeric",
+    value: form.years,
+    onChange: function onChange(e) {
+      return setForm(function (f) {
+        return _objectSpread(_objectSpread({}, f), {}, {
+          years: e.target.value
+        });
+      });
+    },
+    placeholder: "\u4F8B: 20",
+    style: {
+      width: "100%",
+      padding: "10px 12px",
+      fontSize: 15,
+      border: "1.5px solid #DDD",
+      borderRadius: 10,
+      boxSizing: "border-box"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 2
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: colors.textLight,
+      marginBottom: 4
+    }
+  }, "\u91D1\u984D\uFF08\u5186\uFF09"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "numeric",
+    value: form.amount,
+    onChange: function onChange(e) {
+      return setForm(function (f) {
+        return _objectSpread(_objectSpread({}, f), {}, {
+          amount: e.target.value
+        });
+      });
+    },
+    placeholder: "\u4F8B: 3000000",
+    style: {
+      width: "100%",
+      padding: "10px 12px",
+      fontSize: 15,
+      border: "1.5px solid #DDD",
+      borderRadius: 10,
+      boxSizing: "border-box"
+    }
+  }))), /*#__PURE__*/React.createElement(TextInput, {
+    label: "\u30E1\u30E2\uFF08\u4EFB\u610F\uFF09",
+    value: form.memo,
+    onChange: F("memo"),
+    placeholder: "\u88DC\u8DB3\u30FB\u6761\u4EF6\u306A\u3069"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: save,
+    color: colors.income,
+    style: {
+      flex: 1
+    }
+  }, editing ? "更新する" : "追加する"), editing && /*#__PURE__*/React.createElement(OutlineButton, {
+    onClick: function onClick() {
+      setForm(blankForm());
+      setEditing(false);
+    },
+    color: colors.neutral,
+    style: {
+      flex: 1
+    }
+  }, "\u30AD\u30E3\u30F3\u30BB\u30EB"))), sorted.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
+    message: "\u5C06\u6765\u306E\u53CE\u5165\u304C\u307E\u3060\u767B\u9332\u3055\u308C\u3066\u3044\u307E\u305B\u3093"
+  }) : /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: "\u767B\u9332\u6E08\u307F\u306E\u5C06\u6765\u53CE\u5165"
+  }), sorted.map(function (p) {
+    var info = typeInfo(p.type);
+    var displayLabel = p.label || info.label;
+    var nowYear = new Date().getFullYear();
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.id,
+      style: {
+        padding: "12px 14px",
+        borderRadius: 12,
+        marginBottom: 8,
+        border: "1.5px solid ".concat(info.color, "20"),
+        backgroundColor: "".concat(info.color, "08")
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 4
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: info.color,
+        backgroundColor: "".concat(info.color, "20"),
+        padding: "2px 8px",
+        borderRadius: 20
+      }
+    }, info.label), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        color: colors.textLight
+      }
+    }, p.years, "\u5E74\u5F8C\uFF08", nowYear + p.years, "\u5E74\uFF09")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 15,
+        fontWeight: 700,
+        color: colors.text
+      }
+    }, displayLabel), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 18,
+        fontWeight: 800,
+        color: info.color,
+        marginTop: 2
+      }
+    }, fmtYen(p.amount)), p.memo && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: colors.textLight,
+        marginTop: 4
+      }
+    }, p.memo)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6,
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return startEdit(p);
+      },
+      style: {
+        padding: "6px 10px",
+        backgroundColor: "#EEE",
+        border: "none",
+        borderRadius: 8,
+        fontSize: 12,
+        cursor: "pointer"
+      }
+    }, "\u7DE8\u96C6"), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return del(p.id);
+      },
+      style: {
+        padding: "6px 10px",
+        backgroundColor: "#FFEBEE",
+        color: "#E74C3C",
+        border: "none",
+        borderRadius: 8,
+        fontSize: 12,
+        cursor: "pointer"
+      }
+    }, "\u524A\u9664"))));
+  }), /*#__PURE__*/React.createElement(Divider, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: colors.textLight
+    }
+  }, "\u5408\u8A08\u4E88\u5B9A\u53D7\u53D6\u984D"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 18,
+      fontWeight: 800,
+      color: colors.income
+    }
+  }, fmtYen(sorted.reduce(function (a, p) {
+    return a + p.amount;
+  }, 0))))));
+}
+
 // ===== フェーズ5・6: 支出タブ =====
 
 // 日付文字列ユーティリティ
@@ -2263,12 +2651,12 @@ function daysInMonth(ym) {
 }
 
 // 月別支出一覧（メイン画面）
-function ExpenseMonthlyView(_ref22) {
-  var data = _ref22.data,
-    updateData = _ref22.updateData,
-    month = _ref22.month,
-    setMonth = _ref22.setMonth,
-    onSelectDate = _ref22.onSelectDate;
+function ExpenseMonthlyView(_ref23) {
+  var data = _ref23.data,
+    updateData = _ref23.updateData,
+    month = _ref23.month,
+    setMonth = _ref23.setMonth,
+    onSelectDate = _ref23.onSelectDate;
   var days = daysInMonth(month);
   var _month$split$map7 = month.split("-").map(Number),
     _month$split$map8 = _slicedToArray(_month$split$map7, 2),
@@ -2449,21 +2837,21 @@ function ExpenseMonthlyView(_ref22) {
     }, "\u2014")));
   })));
 }
-function ExpenseTab(_ref23) {
-  var data = _ref23.data,
-    updateData = _ref23.updateData;
-  var _useState19 = useState("月別"),
-    _useState20 = _slicedToArray(_useState19, 2),
-    subtab = _useState20[0],
-    setSubtab = _useState20[1];
-  var _useState21 = useState(currentYM()),
-    _useState22 = _slicedToArray(_useState21, 2),
-    month = _useState22[0],
-    setMonth = _useState22[1];
-  var _useState23 = useState(null),
-    _useState24 = _slicedToArray(_useState23, 2),
-    selectedDate = _useState24[0],
-    setSelectedDate = _useState24[1];
+function ExpenseTab(_ref24) {
+  var data = _ref24.data,
+    updateData = _ref24.updateData;
+  var _useState25 = useState("月別"),
+    _useState26 = _slicedToArray(_useState25, 2),
+    subtab = _useState26[0],
+    setSubtab = _useState26[1];
+  var _useState27 = useState(currentYM()),
+    _useState28 = _slicedToArray(_useState27, 2),
+    month = _useState28[0],
+    setMonth = _useState28[1];
+  var _useState29 = useState(null),
+    _useState30 = _slicedToArray(_useState29, 2),
+    selectedDate = _useState30[0],
+    setSelectedDate = _useState30[1];
   var monthExpenses = data.expenses.filter(function (e) {
     var _e$date6;
     return (_e$date6 = e.date) === null || _e$date6 === void 0 ? void 0 : _e$date6.startsWith(month);
@@ -2553,29 +2941,29 @@ var PLAN_TYPES = [{
   label: "🎯 その他",
   color: "#8E44AD"
 }];
-function FuturePlanTab(_ref24) {
+function FuturePlanTab(_ref25) {
   var _PLAN_TYPES$find;
-  var data = _ref24.data,
-    updateData = _ref24.updateData;
+  var data = _ref25.data,
+    updateData = _ref25.updateData;
   var plans = data.futurePlans || [];
-  var _useState25 = useState(false),
-    _useState26 = _slicedToArray(_useState25, 2),
-    showForm = _useState26[0],
-    setShowForm = _useState26[1];
-  var _useState27 = useState(null),
-    _useState28 = _slicedToArray(_useState27, 2),
-    editingId = _useState28[0],
-    setEditingId = _useState28[1];
-  var _useState29 = useState({
+  var _useState31 = useState(false),
+    _useState32 = _slicedToArray(_useState31, 2),
+    showForm = _useState32[0],
+    setShowForm = _useState32[1];
+  var _useState33 = useState(null),
+    _useState34 = _slicedToArray(_useState33, 2),
+    editingId = _useState34[0],
+    setEditingId = _useState34[1];
+  var _useState35 = useState({
       type: "wedding",
       label: "",
       years: 5,
       amount: 0,
       memo: ""
     }),
-    _useState30 = _slicedToArray(_useState29, 2),
-    form = _useState30[0],
-    setForm = _useState30[1];
+    _useState36 = _slicedToArray(_useState35, 2),
+    form = _useState36[0],
+    setForm = _useState36[1];
   var F = function F(field) {
     return function (v) {
       return setForm(function (f) {
@@ -2869,17 +3257,17 @@ function FuturePlanTab(_ref24) {
 }
 
 // ラッパー：日付ナビを正しく扱う
-function ExpenseDayDetailWrapper(_ref25) {
+function ExpenseDayDetailWrapper(_ref26) {
   var _data$assets$nisa3, _data$assets$ideco3;
-  var date = _ref25.date,
-    data = _ref25.data,
-    updateData = _ref25.updateData,
-    onBack = _ref25.onBack,
-    onNavigate = _ref25.onNavigate;
-  var _useState31 = useState(date),
-    _useState32 = _slicedToArray(_useState31, 2),
-    currentDate = _useState32[0],
-    setCurrentDate = _useState32[1];
+  var date = _ref26.date,
+    data = _ref26.data,
+    updateData = _ref26.updateData,
+    onBack = _ref26.onBack,
+    onNavigate = _ref26.onNavigate;
+  var _useState37 = useState(date),
+    _useState38 = _slicedToArray(_useState37, 2),
+    currentDate = _useState38[0],
+    setCurrentDate = _useState38[1];
   React.useEffect(function () {
     setCurrentDate(date);
   }, [date]);
@@ -2889,22 +3277,22 @@ function ExpenseDayDetailWrapper(_ref25) {
     mm = _currentDate$split$ma2[1],
     d = _currentDate$split$ma2[2];
   var dateLabel = "".concat(y, "\u5E74").concat(mm, "\u6708").concat(d, "\u65E5");
-  var _useState33 = useState(null),
-    _useState34 = _slicedToArray(_useState33, 2),
-    selectedCat = _useState34[0],
-    setSelectedCat = _useState34[1];
-  var _useState35 = useState(0),
-    _useState36 = _slicedToArray(_useState35, 2),
-    inputVal = _useState36[0],
-    setInputVal = _useState36[1];
-  var _useState37 = useState(false),
-    _useState38 = _slicedToArray(_useState37, 2),
-    showAddCat = _useState38[0],
-    setShowAddCat = _useState38[1];
-  var _useState39 = useState(""),
+  var _useState39 = useState(null),
     _useState40 = _slicedToArray(_useState39, 2),
-    newCatName = _useState40[0],
-    setNewCatName = _useState40[1];
+    selectedCat = _useState40[0],
+    setSelectedCat = _useState40[1];
+  var _useState41 = useState(0),
+    _useState42 = _slicedToArray(_useState41, 2),
+    inputVal = _useState42[0],
+    setInputVal = _useState42[1];
+  var _useState43 = useState(false),
+    _useState44 = _slicedToArray(_useState43, 2),
+    showAddCat = _useState44[0],
+    setShowAddCat = _useState44[1];
+  var _useState45 = useState(""),
+    _useState46 = _slicedToArray(_useState45, 2),
+    newCatName = _useState46[0],
+    setNewCatName = _useState46[1];
 
   // 資産管理からの月額参照（投資カテゴリのデフォルト値）
   var investDefaults = {
@@ -2914,10 +3302,10 @@ function ExpenseDayDetailWrapper(_ref25) {
       return a + (v.monthlyPremium || 0);
     }, 0)
   };
-  var _useState41 = useState(false),
-    _useState42 = _slicedToArray(_useState41, 2),
-    saved = _useState42[0],
-    setSaved = _useState42[1];
+  var _useState47 = useState(false),
+    _useState48 = _slicedToArray(_useState47, 2),
+    saved = _useState48[0],
+    setSaved = _useState48[1];
   var dayExps = data.expenses.filter(function (e) {
     return e.date === currentDate;
   });
@@ -3323,22 +3711,22 @@ function ExpenseDayDetailWrapper(_ref25) {
 }
 
 // 支出分析
-function ExpenseAnalysis(_ref26) {
-  var data = _ref26.data,
-    month = _ref26.month,
-    setMonth = _ref26.setMonth,
-    monthExpenses = _ref26.monthExpenses;
+function ExpenseAnalysis(_ref27) {
+  var data = _ref27.data,
+    month = _ref27.month,
+    setMonth = _ref27.setMonth,
+    monthExpenses = _ref27.monthExpenses;
   var catTotals = {};
   monthExpenses.forEach(function (e) {
     catTotals[e.category] = (catTotals[e.category] || 0) + e.amount;
   });
   var pieData = Object.entries(catTotals).sort(function (a, b) {
     return b[1] - a[1];
-  }).map(function (_ref27) {
+  }).map(function (_ref28) {
     var _expenseCategories$na2;
-    var _ref28 = _slicedToArray(_ref27, 2),
-      name = _ref28[0],
-      value = _ref28[1];
+    var _ref29 = _slicedToArray(_ref28, 2),
+      name = _ref29[0],
+      value = _ref29[1];
     return {
       name: name,
       value: value,
@@ -3398,9 +3786,9 @@ function ExpenseAnalysis(_ref26) {
     cy: "50%",
     outerRadius: 75,
     dataKey: "value",
-    label: function label(_ref29) {
-      var name = _ref29.name,
-        percent = _ref29.percent;
+    label: function label(_ref30) {
+      var name = _ref30.name,
+        percent = _ref30.percent;
       return percent > 0.05 ? "".concat(name, " ").concat(Math.round(percent * 100), "%") : "";
     },
     fontSize: 10
@@ -3548,21 +3936,21 @@ var LOAN_TYPE_ICON = {
   scholarship: "🎓",
   other: "💰"
 };
-function LoanTab(_ref30) {
-  var data = _ref30.data,
-    updateData = _ref30.updateData;
-  var _useState43 = useState("一覧"),
-    _useState44 = _slicedToArray(_useState43, 2),
-    subtab = _useState44[0],
-    setSubtab = _useState44[1];
-  var _useState45 = useState(null),
-    _useState46 = _slicedToArray(_useState45, 2),
-    selectedLoan = _useState46[0],
-    setSelectedLoan = _useState46[1];
-  var _useState47 = useState(null),
-    _useState48 = _slicedToArray(_useState47, 2),
-    editingLoanId = _useState48[0],
-    setEditingLoanId = _useState48[1];
+function LoanTab(_ref31) {
+  var data = _ref31.data,
+    updateData = _ref31.updateData;
+  var _useState49 = useState("一覧"),
+    _useState50 = _slicedToArray(_useState49, 2),
+    subtab = _useState50[0],
+    setSubtab = _useState50[1];
+  var _useState51 = useState(null),
+    _useState52 = _slicedToArray(_useState51, 2),
+    selectedLoan = _useState52[0],
+    setSelectedLoan = _useState52[1];
+  var _useState53 = useState(null),
+    _useState54 = _slicedToArray(_useState53, 2),
+    editingLoanId = _useState54[0],
+    setEditingLoanId = _useState54[1];
   var tabs = ["一覧", "登録", "返済表", "繰上シミュ"];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(PageTitle, {
     title: "\uD83C\uDFE6 \u30ED\u30FC\u30F3\u30FB\u8FD4\u6E08"
@@ -3620,12 +4008,12 @@ function LoanTab(_ref30) {
 }
 
 // ローン一覧
-function LoanList(_ref31) {
-  var data = _ref31.data,
-    updateData = _ref31.updateData,
-    setSubtab = _ref31.setSubtab,
-    setSelectedLoan = _ref31.setSelectedLoan,
-    setEditingLoanId = _ref31.setEditingLoanId;
+function LoanList(_ref32) {
+  var data = _ref32.data,
+    updateData = _ref32.updateData,
+    setSubtab = _ref32.setSubtab,
+    setSelectedLoan = _ref32.setSelectedLoan,
+    setEditingLoanId = _ref32.setEditingLoanId;
   var totalBalance = data.loans.reduce(function (a, l) {
     return a + l.remainingBalance;
   }, 0);
@@ -3729,9 +4117,9 @@ function LoanList(_ref31) {
   }, {
     label: "10年後",
     val: total10y
-  }].map(function (_ref32) {
-    var label = _ref32.label,
-      val = _ref32.val;
+  }].map(function (_ref33) {
+    var label = _ref33.label,
+      val = _ref33.val;
     return /*#__PURE__*/React.createElement("div", {
       key: label,
       style: {
@@ -3960,17 +4348,17 @@ function LoanList(_ref31) {
 }
 
 // ローン登録・編集フォーム（editingLoanId があれば編集モード）
-function LoanForm(_ref33) {
-  var data = _ref33.data,
-    updateData = _ref33.updateData,
-    setSubtab = _ref33.setSubtab,
-    editingLoanId = _ref33.editingLoanId,
-    setEditingLoanId = _ref33.setEditingLoanId;
+function LoanForm(_ref34) {
+  var data = _ref34.data,
+    updateData = _ref34.updateData,
+    setSubtab = _ref34.setSubtab,
+    editingLoanId = _ref34.editingLoanId,
+    setEditingLoanId = _ref34.setEditingLoanId;
   var editTarget = editingLoanId ? data.loans.find(function (l) {
     return l.id === editingLoanId;
   }) : null;
   var isEdit = !!editTarget;
-  var _useState49 = useState(editTarget ? _objectSpread({}, editTarget) : {
+  var _useState55 = useState(editTarget ? _objectSpread({}, editTarget) : {
       type: "car",
       name: "",
       totalAmount: 0,
@@ -3981,13 +4369,13 @@ function LoanForm(_ref33) {
       endDate: "",
       memo: ""
     }),
-    _useState50 = _slicedToArray(_useState49, 2),
-    form = _useState50[0],
-    setForm = _useState50[1];
-  var _useState51 = useState(false),
-    _useState52 = _slicedToArray(_useState51, 2),
-    saved = _useState52[0],
-    setSaved = _useState52[1];
+    _useState56 = _slicedToArray(_useState55, 2),
+    form = _useState56[0],
+    setForm = _useState56[1];
+  var _useState57 = useState(false),
+    _useState58 = _slicedToArray(_useState57, 2),
+    saved = _useState58[0],
+    setSaved = _useState58[1];
 
   // 編集対象が切り替わったらフォームを再初期化
   useEffect(function () {
@@ -4168,10 +4556,10 @@ function LoanForm(_ref33) {
 }
 
 // 返済スケジュール表
-function LoanSchedule(_ref34) {
-  var data = _ref34.data,
-    selectedLoan = _ref34.selectedLoan,
-    setSelectedLoan = _ref34.setSelectedLoan;
+function LoanSchedule(_ref35) {
+  var data = _ref35.data,
+    selectedLoan = _ref35.selectedLoan,
+    setSelectedLoan = _ref35.setSelectedLoan;
   var loan = data.loans.find(function (l) {
     return l.id === selectedLoan;
   }) || data.loans[0];
@@ -4350,18 +4738,18 @@ function LoanSchedule(_ref34) {
 }
 
 // 繰上返済シミュレーター
-function LoanPrepay(_ref35) {
-  var data = _ref35.data,
-    selectedLoan = _ref35.selectedLoan,
-    setSelectedLoan = _ref35.setSelectedLoan;
-  var _useState53 = useState(0),
-    _useState54 = _slicedToArray(_useState53, 2),
-    prepayAmount = _useState54[0],
-    setPrepayAmount = _useState54[1];
-  var _useState55 = useState(null),
-    _useState56 = _slicedToArray(_useState55, 2),
-    result = _useState56[0],
-    setResult = _useState56[1];
+function LoanPrepay(_ref36) {
+  var data = _ref36.data,
+    selectedLoan = _ref36.selectedLoan,
+    setSelectedLoan = _ref36.setSelectedLoan;
+  var _useState59 = useState(0),
+    _useState60 = _slicedToArray(_useState59, 2),
+    prepayAmount = _useState60[0],
+    setPrepayAmount = _useState60[1];
+  var _useState61 = useState(null),
+    _useState62 = _slicedToArray(_useState61, 2),
+    result = _useState62[0],
+    setResult = _useState62[1];
   var loan = data.loans.find(function (l) {
     return l.id === selectedLoan;
   }) || data.loans[0];
@@ -4564,13 +4952,13 @@ function LoanPrepay(_ref35) {
 // ===== フェーズ9〜11: 資産タブ =====
 
 var ASSET_SUBTABS = ["銀行・現金", "NISA", "iDeCo", "変額年金", "総資産"];
-function AssetTab(_ref36) {
-  var data = _ref36.data,
-    updateData = _ref36.updateData;
-  var _useState57 = useState("銀行・現金"),
-    _useState58 = _slicedToArray(_useState57, 2),
-    subtab = _useState58[0],
-    setSubtab = _useState58[1];
+function AssetTab(_ref37) {
+  var data = _ref37.data,
+    updateData = _ref37.updateData;
+  var _useState63 = useState("銀行・現金"),
+    _useState64 = _slicedToArray(_useState63, 2),
+    subtab = _useState64[0],
+    setSubtab = _useState64[1];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(PageTitle, {
     title: "\uD83D\uDCC8 \u8CC7\u7523\u7BA1\u7406"
   }), /*#__PURE__*/React.createElement("div", {
@@ -4620,17 +5008,17 @@ function AssetTab(_ref36) {
 }
 
 // 銀行・現金
-function BankTab(_ref37) {
-  var data = _ref37.data,
-    updateData = _ref37.updateData;
-  var _useState59 = useState(null),
-    _useState60 = _slicedToArray(_useState59, 2),
-    editingId = _useState60[0],
-    setEditingId = _useState60[1];
-  var _useState61 = useState(false),
-    _useState62 = _slicedToArray(_useState61, 2),
-    showAdd = _useState62[0],
-    setShowAdd = _useState62[1];
+function BankTab(_ref38) {
+  var data = _ref38.data,
+    updateData = _ref38.updateData;
+  var _useState65 = useState(null),
+    _useState66 = _slicedToArray(_useState65, 2),
+    editingId = _useState66[0],
+    setEditingId = _useState66[1];
+  var _useState67 = useState(false),
+    _useState68 = _slicedToArray(_useState67, 2),
+    showAdd = _useState68[0],
+    setShowAdd = _useState68[1];
   var blankBank = function blankBank() {
     return {
       name: "",
@@ -4639,10 +5027,10 @@ function BankTab(_ref37) {
       memo: ""
     };
   };
-  var _useState63 = useState(blankBank()),
-    _useState64 = _slicedToArray(_useState63, 2),
-    form = _useState64[0],
-    setForm = _useState64[1];
+  var _useState69 = useState(blankBank()),
+    _useState70 = _slicedToArray(_useState69, 2),
+    form = _useState70[0],
+    setForm = _useState70[1];
   var accounts = data.assets.bankAccounts || [];
   var total = accounts.reduce(function (a, b) {
     return a + b.balance;
@@ -4853,14 +5241,14 @@ function BankTab(_ref37) {
 }
 
 // 株式・投信
-function InvestTab(_ref38) {
-  var data = _ref38.data,
-    updateData = _ref38.updateData;
-  var _useState65 = useState(false),
-    _useState66 = _slicedToArray(_useState65, 2),
-    showAdd = _useState66[0],
-    setShowAdd = _useState66[1];
-  var _useState67 = useState({
+function InvestTab(_ref39) {
+  var data = _ref39.data,
+    updateData = _ref39.updateData;
+  var _useState71 = useState(false),
+    _useState72 = _slicedToArray(_useState71, 2),
+    showAdd = _useState72[0],
+    setShowAdd = _useState72[1];
+  var _useState73 = useState({
       name: "",
       type: "fund",
       account: "NISA",
@@ -4870,9 +5258,9 @@ function InvestTab(_ref38) {
       purchaseDate: "",
       memo: ""
     }),
-    _useState68 = _slicedToArray(_useState67, 2),
-    form = _useState68[0],
-    setForm = _useState68[1];
+    _useState74 = _slicedToArray(_useState73, 2),
+    form = _useState74[0],
+    setForm = _useState74[1];
   var investments = data.assets.investments || [];
   var totalValue = investments.reduce(function (a, inv) {
     return a + inv.currentPrice * inv.quantity;
@@ -5161,9 +5549,9 @@ function InvestTab(_ref38) {
 }
 
 // NISA管理（投信登録・枠管理・総資産連携）
-function NisaTab(_ref39) {
-  var data = _ref39.data,
-    updateData = _ref39.updateData;
+function NisaTab(_ref40) {
+  var data = _ref40.data,
+    updateData = _ref40.updateData;
   var nisa = data.assets.nisa || {};
   var year = nisa.year || new Date().getFullYear();
   var LIMITS = {
@@ -5172,15 +5560,15 @@ function NisaTab(_ref39) {
     lifetime: 18000000
   };
   var investments = nisa.investments || [];
-  var _useState69 = useState(false),
-    _useState70 = _slicedToArray(_useState69, 2),
-    showAdd = _useState70[0],
-    setShowAdd = _useState70[1];
-  var _useState71 = useState(null),
-    _useState72 = _slicedToArray(_useState71, 2),
-    editingInvestId = _useState72[0],
-    setEditingInvestId = _useState72[1];
-  var _useState73 = useState({
+  var _useState75 = useState(false),
+    _useState76 = _slicedToArray(_useState75, 2),
+    showAdd = _useState76[0],
+    setShowAdd = _useState76[1];
+  var _useState77 = useState(null),
+    _useState78 = _slicedToArray(_useState77, 2),
+    editingInvestId = _useState78[0],
+    setEditingInvestId = _useState78[1];
+  var _useState79 = useState({
       name: "",
       nisaType: "つみたて",
       purchasePrice: 0,
@@ -5188,9 +5576,9 @@ function NisaTab(_ref39) {
       currentPrice: 0,
       memo: ""
     }),
-    _useState74 = _slicedToArray(_useState73, 2),
-    form = _useState74[0],
-    setForm = _useState74[1];
+    _useState80 = _slicedToArray(_useState79, 2),
+    form = _useState80[0],
+    setForm = _useState80[1];
 
   // 枠使用額：登録銘柄の取得額合計から自動計算
   var tsumitateUsed = investments.filter(function (i) {
@@ -5307,11 +5695,11 @@ function NisaTab(_ref39) {
       color: colors.textLight,
       marginBottom: 12
     }
-  }, "\u203B \u67A0\u4F7F\u7528\u984D\u306F\u767B\u9332\u9298\u67C4\u306E\u53D6\u5F97\u984D\u304B\u3089\u81EA\u52D5\u8A08\u7B97\u3002\u751F\u6DAF\u67A0\u306F\u3064\u307F\u305F\u3066\uFF0B\u6210\u9577\u306E\u5408\u8A08\u3067\u3059\u3002"), sections.map(function (_ref40) {
-    var label = _ref40.label,
-      used = _ref40.used,
-      limit = _ref40.limit,
-      color = _ref40.color;
+  }, "\u203B \u67A0\u4F7F\u7528\u984D\u306F\u767B\u9332\u9298\u67C4\u306E\u53D6\u5F97\u984D\u304B\u3089\u81EA\u52D5\u8A08\u7B97\u3002\u751F\u6DAF\u67A0\u306F\u3064\u307F\u305F\u3066\uFF0B\u6210\u9577\u306E\u5408\u8A08\u3067\u3059\u3002"), sections.map(function (_ref41) {
+    var label = _ref41.label,
+      used = _ref41.used,
+      limit = _ref41.limit,
+      color = _ref41.color;
     var remaining = limit - used;
     return /*#__PURE__*/React.createElement("div", {
       key: label,
@@ -5600,9 +5988,9 @@ function NisaTab(_ref39) {
 }
 
 // iDeCo管理
-function IdecoTab(_ref41) {
-  var data = _ref41.data,
-    updateData = _ref41.updateData;
+function IdecoTab(_ref42) {
+  var data = _ref42.data,
+    updateData = _ref42.updateData;
   var ideco = data.assets.ideco || {};
   var F = function F(field) {
     return function (val) {
@@ -5728,17 +6116,17 @@ function IdecoTab(_ref41) {
 }
 
 // 変額年金保険
-function AnnuityTab(_ref42) {
-  var data = _ref42.data,
-    updateData = _ref42.updateData;
-  var _useState75 = useState(null),
-    _useState76 = _slicedToArray(_useState75, 2),
-    editingId = _useState76[0],
-    setEditingId = _useState76[1];
-  var _useState77 = useState(false),
-    _useState78 = _slicedToArray(_useState77, 2),
-    showAdd = _useState78[0],
-    setShowAdd = _useState78[1];
+function AnnuityTab(_ref43) {
+  var data = _ref43.data,
+    updateData = _ref43.updateData;
+  var _useState81 = useState(null),
+    _useState82 = _slicedToArray(_useState81, 2),
+    editingId = _useState82[0],
+    setEditingId = _useState82[1];
+  var _useState83 = useState(false),
+    _useState84 = _slicedToArray(_useState83, 2),
+    showAdd = _useState84[0],
+    setShowAdd = _useState84[1];
   var annuities = data.assets.variableAnnuities || [];
   var blankAnnuity = function blankAnnuity() {
     return {
@@ -5753,10 +6141,10 @@ function AnnuityTab(_ref42) {
       memo: ""
     };
   };
-  var _useState79 = useState(blankAnnuity()),
-    _useState80 = _slicedToArray(_useState79, 2),
-    form = _useState80[0],
-    setForm = _useState80[1];
+  var _useState85 = useState(blankAnnuity()),
+    _useState86 = _slicedToArray(_useState85, 2),
+    form = _useState86[0],
+    setForm = _useState86[1];
   var F = function F(field) {
     return function (v) {
       return setForm(function (f) {
@@ -5996,9 +6384,9 @@ function AnnuityTab(_ref42) {
 }
 
 // 総資産・純資産
-function NetWorthTab(_ref43) {
+function NetWorthTab(_ref44) {
   var _data$assets$nisa4, _data$assets$ideco4;
-  var data = _ref43.data;
+  var data = _ref44.data;
   var bankTotal = (data.assets.bankAccounts || []).reduce(function (a, b) {
     return a + b.balance;
   }, 0);
@@ -6052,10 +6440,10 @@ function NetWorthTab(_ref43) {
     label: "変額年金",
     val: annuityVal,
     color: colors.asset
-  }].map(function (_ref44) {
-    var label = _ref44.label,
-      val = _ref44.val,
-      color = _ref44.color;
+  }].map(function (_ref45) {
+    var label = _ref45.label,
+      val = _ref45.val,
+      color = _ref45.color;
     return /*#__PURE__*/React.createElement("div", {
       key: label,
       style: {
@@ -6139,9 +6527,9 @@ function NetWorthTab(_ref43) {
     cy: "50%",
     outerRadius: 75,
     dataKey: "value",
-    label: function label(_ref45) {
-      var name = _ref45.name,
-        percent = _ref45.percent;
+    label: function label(_ref46) {
+      var name = _ref46.name,
+        percent = _ref46.percent;
       return percent > 0.05 ? "".concat(name, " ").concat(Math.round(percent * 100), "%") : "";
     },
     fontSize: 10
@@ -6160,13 +6548,13 @@ function NetWorthTab(_ref43) {
 // ===== フェーズ12・13: シミュレーションタブ =====
 
 var SIM_SUBTABS = ["将来資産", "ローン完済後", "老後資金", "FIRE試算"];
-function SimulationTab(_ref46) {
-  var data = _ref46.data,
-    updateData = _ref46.updateData;
-  var _useState81 = useState("将来資産"),
-    _useState82 = _slicedToArray(_useState81, 2),
-    subtab = _useState82[0],
-    setSubtab = _useState82[1];
+function SimulationTab(_ref47) {
+  var data = _ref47.data,
+    updateData = _ref47.updateData;
+  var _useState87 = useState("将来資産"),
+    _useState88 = _slicedToArray(_useState87, 2),
+    subtab = _useState88[0],
+    setSubtab = _useState88[1];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(PageTitle, {
     title: "\uD83D\uDD2E \u30B7\u30DF\u30E5\u30EC\u30FC\u30B7\u30E7\u30F3"
   }), /*#__PURE__*/React.createElement("div", {
@@ -6210,8 +6598,8 @@ function SimulationTab(_ref46) {
 }
 
 // 将来資産シミュレーター
-function FutureAssetSim(_ref47) {
-  var data = _ref47.data;
+function FutureAssetSim(_ref48) {
+  var data = _ref48.data;
   var totalAsset = function (_data$assets$nisa5, _data$assets$ideco5) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
@@ -6221,22 +6609,22 @@ function FutureAssetSim(_ref47) {
     }, 0);
     return b + i + (((_data$assets$ideco5 = data.assets.ideco) === null || _data$assets$ideco5 === void 0 ? void 0 : _data$assets$ideco5.currentValue) || 0);
   }();
-  var _useState83 = useState(totalAsset || 0),
-    _useState84 = _slicedToArray(_useState83, 2),
-    currentAsset = _useState84[0],
-    setCurrentAsset = _useState84[1];
-  var _useState85 = useState(50000),
-    _useState86 = _slicedToArray(_useState85, 2),
-    monthly = _useState86[0],
-    setMonthly = _useState86[1];
-  var _useState87 = useState(5),
-    _useState88 = _slicedToArray(_useState87, 2),
-    rate = _useState88[0],
-    setRate = _useState88[1];
-  var _useState89 = useState(20),
+  var _useState89 = useState(totalAsset || 0),
     _useState90 = _slicedToArray(_useState89, 2),
-    years = _useState90[0],
-    setYears = _useState90[1];
+    currentAsset = _useState90[0],
+    setCurrentAsset = _useState90[1];
+  var _useState91 = useState(50000),
+    _useState92 = _slicedToArray(_useState91, 2),
+    monthly = _useState92[0],
+    setMonthly = _useState92[1];
+  var _useState93 = useState(5),
+    _useState94 = _slicedToArray(_useState93, 2),
+    rate = _useState94[0],
+    setRate = _useState94[1];
+  var _useState95 = useState(20),
+    _useState96 = _slicedToArray(_useState95, 2),
+    years = _useState96[0],
+    setYears = _useState96[1];
   var calcFuture = function calcFuture(asset, mon, annualRate, yrs) {
     var r = annualRate / 100 / 12;
     var bal = asset;
@@ -6474,12 +6862,12 @@ function FutureAssetSim(_ref47) {
 }
 
 // ローン完済後シミュレーター
-function AfterLoanSim(_ref48) {
-  var data = _ref48.data;
-  var _useState91 = useState(5),
-    _useState92 = _slicedToArray(_useState91, 2),
-    rate = _useState92[0],
-    setRate = _useState92[1];
+function AfterLoanSim(_ref49) {
+  var data = _ref49.data;
+  var _useState97 = useState(5),
+    _useState98 = _slicedToArray(_useState97, 2),
+    rate = _useState98[0],
+    setRate = _useState98[1];
   var loans = _toConsumableArray(data.loans).sort(function (a, b) {
     var aMonths = a.monthlyPayment > 0 ? Math.ceil(a.remainingBalance / a.monthlyPayment) : 999;
     var bMonths = b.monthlyPayment > 0 ? Math.ceil(b.remainingBalance / b.monthlyPayment) : 999;
@@ -6634,32 +7022,32 @@ function AfterLoanSim(_ref48) {
 }
 
 // 老後資金シミュレーター
-function RetirementSim(_ref49) {
-  var data = _ref49.data;
-  var _useState93 = useState(35),
-    _useState94 = _slicedToArray(_useState93, 2),
-    age = _useState94[0],
-    setAge = _useState94[1];
-  var _useState95 = useState(65),
-    _useState96 = _slicedToArray(_useState95, 2),
-    retireAge = _useState96[0],
-    setRetireAge = _useState96[1];
-  var _useState97 = useState(90),
-    _useState98 = _slicedToArray(_useState97, 2),
-    lifeAge = _useState98[0],
-    setLifeAge = _useState98[1];
-  var _useState99 = useState(150000),
+function RetirementSim(_ref50) {
+  var data = _ref50.data;
+  var _useState99 = useState(35),
     _useState100 = _slicedToArray(_useState99, 2),
-    pension = _useState100[0],
-    setPension = _useState100[1];
-  var _useState101 = useState(2000000),
+    age = _useState100[0],
+    setAge = _useState100[1];
+  var _useState101 = useState(65),
     _useState102 = _slicedToArray(_useState101, 2),
-    severance = _useState102[0],
-    setSeverance = _useState102[1];
-  var _useState103 = useState(250000),
+    retireAge = _useState102[0],
+    setRetireAge = _useState102[1];
+  var _useState103 = useState(90),
     _useState104 = _slicedToArray(_useState103, 2),
-    monthlyLiving = _useState104[0],
-    setMonthlyLiving = _useState104[1];
+    lifeAge = _useState104[0],
+    setLifeAge = _useState104[1];
+  var _useState105 = useState(150000),
+    _useState106 = _slicedToArray(_useState105, 2),
+    pension = _useState106[0],
+    setPension = _useState106[1];
+  var _useState107 = useState(2000000),
+    _useState108 = _slicedToArray(_useState107, 2),
+    severance = _useState108[0],
+    setSeverance = _useState108[1];
+  var _useState109 = useState(250000),
+    _useState110 = _slicedToArray(_useState109, 2),
+    monthlyLiving = _useState110[0],
+    setMonthlyLiving = _useState110[1];
   var retireYears = retireAge - age;
   var lifeYears = lifeAge - retireAge;
 
@@ -6908,8 +7296,8 @@ function RetirementSim(_ref49) {
 }
 
 // FIRE試算
-function FireSim(_ref50) {
-  var data = _ref50.data;
+function FireSim(_ref51) {
+  var data = _ref51.data;
   var totalAsset = function (_data$assets$nisa7, _data$assets$ideco7) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
@@ -6919,26 +7307,26 @@ function FireSim(_ref50) {
     }, 0);
     return b + i + (((_data$assets$ideco7 = data.assets.ideco) === null || _data$assets$ideco7 === void 0 ? void 0 : _data$assets$ideco7.currentValue) || 0);
   }();
-  var _useState105 = useState(totalAsset || 0),
-    _useState106 = _slicedToArray(_useState105, 2),
-    currentAsset = _useState106[0],
-    setCurrentAsset = _useState106[1];
-  var _useState107 = useState(250000),
-    _useState108 = _slicedToArray(_useState107, 2),
-    monthlyLiving = _useState108[0],
-    setMonthlyLiving = _useState108[1];
-  var _useState109 = useState(4),
-    _useState110 = _slicedToArray(_useState109, 2),
-    withdrawRate = _useState110[0],
-    setWithdrawRate = _useState110[1];
-  var _useState111 = useState(100000),
+  var _useState111 = useState(totalAsset || 0),
     _useState112 = _slicedToArray(_useState111, 2),
-    monthly = _useState112[0],
-    setMonthly = _useState112[1];
-  var _useState113 = useState(5),
+    currentAsset = _useState112[0],
+    setCurrentAsset = _useState112[1];
+  var _useState113 = useState(250000),
     _useState114 = _slicedToArray(_useState113, 2),
-    rate = _useState114[0],
-    setRate = _useState114[1];
+    monthlyLiving = _useState114[0],
+    setMonthlyLiving = _useState114[1];
+  var _useState115 = useState(4),
+    _useState116 = _slicedToArray(_useState115, 2),
+    withdrawRate = _useState116[0],
+    setWithdrawRate = _useState116[1];
+  var _useState117 = useState(100000),
+    _useState118 = _slicedToArray(_useState117, 2),
+    monthly = _useState118[0],
+    setMonthly = _useState118[1];
+  var _useState119 = useState(5),
+    _useState120 = _slicedToArray(_useState119, 2),
+    rate = _useState120[0],
+    setRate = _useState120[1];
   var annualLiving = monthlyLiving * 12;
   var fireTarget = Math.round(annualLiving / (withdrawRate / 100));
 
@@ -7185,9 +7573,9 @@ function FireSim(_ref50) {
 
 // ===== フェーズ15: CSV出力・JSONバックアップ =====
 
-function DataManagementPanel(_ref51) {
-  var data = _ref51.data,
-    updateData = _ref51.updateData;
+function DataManagementPanel(_ref52) {
+  var data = _ref52.data,
+    updateData = _ref52.updateData;
   var exportCSV = function exportCSV() {
     var header = "日付,カテゴリ,サブカテゴリ,金額,固定費,支払方法,メモ";
     var rows = data.expenses.map(function (e) {
@@ -7291,17 +7679,17 @@ function DataManagementPanel(_ref51) {
 }
 
 // ===== 財務諸表タブ =====
-function FinancialTab(_ref52) {
+function FinancialTab(_ref53) {
   var _data$assets$nisa8, _data$assets$ideco8;
-  var data = _ref52.data;
-  var _useState115 = useState(currentYM()),
-    _useState116 = _slicedToArray(_useState115, 2),
-    month = _useState116[0],
-    setMonth = _useState116[1];
-  var _useState117 = useState("bs"),
-    _useState118 = _slicedToArray(_useState117, 2),
-    subtab = _useState118[0],
-    setSubtab = _useState118[1];
+  var data = _ref53.data;
+  var _useState121 = useState(currentYM()),
+    _useState122 = _slicedToArray(_useState121, 2),
+    month = _useState122[0],
+    setMonth = _useState122[1];
+  var _useState123 = useState("bs"),
+    _useState124 = _slicedToArray(_useState123, 2),
+    subtab = _useState124[0],
+    setSubtab = _useState124[1];
 
   // ---- 共通計算ヘルパー ----
   var getSalary = function getSalary(ym) {
@@ -7631,12 +8019,12 @@ function FinancialTab(_ref52) {
     var varH = Math.round(varExp / maxVal * 180);
     var profitH = Math.max(Math.round(Math.abs(profit) / maxVal * 180), profit !== 0 ? 20 : 4);
     var isProfit = profit >= 0;
-    var Bar = function Bar(_ref53) {
-      var height = _ref53.height,
-        color = _ref53.color,
-        label = _ref53.label,
-        value = _ref53.value,
-        striped = _ref53.striped;
+    var Bar = function Bar(_ref54) {
+      var height = _ref54.height,
+        color = _ref54.color,
+        label = _ref54.label,
+        value = _ref54.value,
+        striped = _ref54.striped;
       return /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
@@ -7750,11 +8138,11 @@ function FinancialTab(_ref52) {
         color: colors.textLight,
         marginBottom: 6
       }
-    }, "\u8CBB\u7528\u5185\u8A33"), catBreakdown.map(function (_ref54) {
+    }, "\u8CBB\u7528\u5185\u8A33"), catBreakdown.map(function (_ref55) {
       var _expenseCategories$ca;
-      var _ref55 = _slicedToArray(_ref54, 2),
-        cat = _ref55[0],
-        amt = _ref55[1];
+      var _ref56 = _slicedToArray(_ref55, 2),
+        cat = _ref56[0],
+        amt = _ref56[1];
       var pct = expense > 0 ? amt / expense : 0;
       var catColor = ((_expenseCategories$ca = expenseCategories[cat]) === null || _expenseCategories$ca === void 0 ? void 0 : _expenseCategories$ca.color) || colors.neutral;
       return /*#__PURE__*/React.createElement("div", {
