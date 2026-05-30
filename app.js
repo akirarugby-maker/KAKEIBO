@@ -60,7 +60,10 @@ var initialState = {
     "食費": 50000,
     "外食": 20000,
     "住居費": 80000,
-    "光熱費": 15000,
+    "マンション管理費等": 20000,
+    "電気代": 8000,
+    "ガス代": 5000,
+    "水道代": 3000,
     "通信費": 10000,
     "交通費": 20000,
     "保険料": 30000,
@@ -126,8 +129,20 @@ var EXPENSE_CATS = [{
   color: "#E67E22",
   isFixed: true
 }, {
-  name: "光熱費",
+  name: "マンション管理費等",
+  color: "#D35400",
+  isFixed: true
+}, {
+  name: "電気代",
   color: "#F1C40F",
+  isFixed: false
+}, {
+  name: "ガス代",
+  color: "#FF9800",
+  isFixed: false
+}, {
+  name: "水道代",
+  color: "#3498DB",
   isFixed: false
 }, {
   name: "通信費",
