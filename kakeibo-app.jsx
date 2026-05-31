@@ -1102,8 +1102,8 @@ function IncomeTab({ data, updateData }) {
   const totalBI     = Object.values(form.businessIncome  || {}).reduce((a, b) => a + b, 0);
   const totalGD     = Object.values(form.generalDeductions || {}).reduce((a, b) => a + b, 0);
   const totalDed    = Object.values(form.deductions).reduce((a, b) => a + b, 0);
-  const netPay      = grossPay - totalDed;
-  const totalIncome = netPay + totalBI - totalGD + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
+  const netPay      = grossPay + totalBI - totalGD - totalDed;
+  const totalIncome = netPay + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
 
   // 固定費（カテゴリで自動判定：住居費・通信費・保険料）
   const fixedExpenses = data.expenses
@@ -1240,22 +1240,29 @@ function IncomeTab({ data, updateData }) {
 
         {/* 手取り表示 */}
         <Card style={{ backgroundColor: "#F0FFF4", border: `2px solid ${colors.income}` }}>
-          <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: colors.textLight, textAlign: "center", marginBottom: 4 }}>
+            支給 ＋ 事業所得 − 一般控除 − 控除
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+            <span style={{ fontSize: 12, color: colors.textLight }}>支給合計</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: colors.income }}>+{fmtYen(grossPay)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+            <span style={{ fontSize: 12, color: colors.textLight }}>事業所得</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#E67E22" }}>+{fmtYen(totalBI)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+            <span style={{ fontSize: 12, color: colors.textLight }}>一般控除</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: colors.expense }}>-{fmtYen(totalGD)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: colors.textLight }}>控除合計</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: colors.expense }}>-{fmtYen(totalDed)}</span>
+          </div>
+          <div style={{ borderTop: "2px solid #C8E6C9", paddingTop: 8, textAlign: "center" }}>
             <div style={{ fontSize: 13, color: colors.textLight, marginBottom: 4 }}>差引支給額（手取り）</div>
             <div style={{ fontSize: 32, fontWeight: 800, color: colors.income }}>{fmtYen(netPay)}</div>
           </div>
-          {totalBI > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid #C8E6C9" }}>
-              <span style={{ fontSize: 13, color: colors.textLight }}>＋ 事業所得</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#E67E22" }}>+{fmtYen(totalBI)}</span>
-            </div>
-          )}
-          {totalGD > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-              <span style={{ fontSize: 13, color: colors.textLight }}>− 一般控除</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: colors.expense }}>-{fmtYen(totalGD)}</span>
-            </div>
-          )}
         </Card>
 
         {/* 配偶者収入・ボーナス・副収入 */}

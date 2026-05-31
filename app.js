@@ -1953,8 +1953,8 @@ function IncomeTab(_ref21) {
   var totalDed = Object.values(form.deductions).reduce(function (a, b) {
     return a + b;
   }, 0);
-  var netPay = grossPay - totalDed;
-  var totalIncome = netPay + totalBI - totalGD + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
+  var netPay = grossPay + totalBI - totalGD - totalDed;
+  var totalIncome = netPay + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
 
   // 固定費（カテゴリで自動判定：住居費・通信費・保険料）
   var fixedExpenses = data.expenses.filter(function (e) {
@@ -2265,6 +2265,83 @@ function IncomeTab(_ref21) {
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
+      fontSize: 11,
+      color: colors.textLight,
+      textAlign: "center",
+      marginBottom: 4
+    }
+  }, "\u652F\u7D66 \uFF0B \u4E8B\u696D\u6240\u5F97 \u2212 \u4E00\u822C\u63A7\u9664 \u2212 \u63A7\u9664"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: colors.textLight
+    }
+  }, "\u652F\u7D66\u5408\u8A08"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: colors.income
+    }
+  }, "+", fmtYen(grossPay))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: colors.textLight
+    }
+  }, "\u4E8B\u696D\u6240\u5F97"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: "#E67E22"
+    }
+  }, "+", fmtYen(totalBI))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: colors.textLight
+    }
+  }, "\u4E00\u822C\u63A7\u9664"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: colors.expense
+    }
+  }, "-", fmtYen(totalGD))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: colors.textLight
+    }
+  }, "\u63A7\u9664\u5408\u8A08"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: colors.expense
+    }
+  }, "-", fmtYen(totalDed))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: "2px solid #C8E6C9",
+      paddingTop: 8,
       textAlign: "center"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -2279,43 +2356,7 @@ function IncomeTab(_ref21) {
       fontWeight: 800,
       color: colors.income
     }
-  }, fmtYen(netPay))), totalBI > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      marginTop: 8,
-      paddingTop: 8,
-      borderTop: "1px solid #C8E6C9"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13,
-      color: colors.textLight
-    }
-  }, "\uFF0B \u4E8B\u696D\u6240\u5F97"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 14,
-      fontWeight: 700,
-      color: "#E67E22"
-    }
-  }, "+", fmtYen(totalBI))), totalGD > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      marginTop: 4
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13,
-      color: colors.textLight
-    }
-  }, "\u2212 \u4E00\u822C\u63A7\u9664"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 14,
-      fontWeight: 700,
-      color: colors.expense
-    }
-  }, "-", fmtYen(totalGD)))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+  }, fmtYen(netPay)))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
     title: "\u914D\u5076\u8005\u53CE\u5165\u30FB\u30DC\u30FC\u30CA\u30B9\u30FB\u526F\u53CE\u5165"
   }), /*#__PURE__*/React.createElement(AmountInput, {
     label: "\u914D\u5076\u8005\u53CE\u5165\uFF08\u624B\u53D6\u308A\uFF09",
