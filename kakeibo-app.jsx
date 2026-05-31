@@ -704,7 +704,7 @@ function HomeTab({ data, updateData }) {
   const totalDeductions = thisSalary
     ? Object.values(thisSalary.deductions || {}).reduce((a, b) => a + b, 0)
     : 0;
-  const netIncome = grossIncome - totalDeductions + (thisSalary?.bonus || 0) + (thisSalary?.spouseIncome || 0) + (thisSalary?.sideIncome || 0);
+  const netIncome = grossIncome - totalDeductions + (thisSalary?.bonus || 0) + (thisSalary?.spouseIncome || 0) + (thisSalary?.sideIncome || 0) + Object.values(thisSalary?.businessIncome || {}).reduce((a,b)=>a+b,0) - Object.values(thisSalary?.generalDeductions || {}).reduce((a,b)=>a+b,0);
 
   // 今月の支出
   const monthExpenses = data.expenses.filter((e) => e.date?.startsWith(ym));
@@ -726,7 +726,7 @@ function HomeTab({ data, updateData }) {
     ? prevSalary.basicSalary
       + Object.values(prevSalary.allowances || {}).reduce((a, b) => a + b, 0)
       - Object.values(prevSalary.deductions || {}).reduce((a, b) => a + b, 0)
-      + (prevSalary.bonus || 0) + (prevSalary.spouseIncome || 0) + (prevSalary.sideIncome || 0)
+      + (prevSalary.bonus || 0) + (prevSalary.spouseIncome || 0) + (prevSalary.sideIncome || 0) + Object.values(prevSalary.businessIncome || {}).reduce((a,b)=>a+b,0) - Object.values(prevSalary.generalDeductions || {}).reduce((a,b)=>a+b,0)
     : netIncome;
   const prevExpense = data.expenses
     .filter((e) => e.date?.startsWith(prevMonth))
@@ -796,7 +796,7 @@ function HomeTab({ data, updateData }) {
   const cardDed = cardSalary
     ? Object.values(cardSalary.deductions || {}).reduce((a, b) => a + b, 0)
     : 0;
-  const cardNet = cardGross - cardDed + (cardSalary?.bonus || 0) + (cardSalary?.spouseIncome || 0) + (cardSalary?.sideIncome || 0);
+  const cardNet = cardGross - cardDed + (cardSalary?.bonus || 0) + (cardSalary?.spouseIncome || 0) + (cardSalary?.sideIncome || 0) + Object.values(cardSalary?.businessIncome || {}).reduce((a,b)=>a+b,0) - Object.values(cardSalary?.generalDeductions || {}).reduce((a,b)=>a+b,0);
   const cardExpense = data.expenses.filter((e) => e.date?.startsWith(cardMonth)).reduce((a, e) => a + e.amount, 0);
   const cardBalance = cardNet - cardExpense;
 
@@ -1057,6 +1057,8 @@ const blankSalary = () => ({
   month: currentYM(),
   basicSalary: 0,
   allowances: { commuting: 0, housing: 0, overtime: 0, family: 0, other: 0 },
+  businessIncome: { firstYearFee: 0, renewalFee: 0, conservationFee: 0, nonLifeFee: 0, commuting: 0, carInsuranceSubsidy: 0, taxAdjustment: 0, balanceFee: 0, other: 0 },
+  generalDeductions: { groupInsurance: 0, novelty: 0, salesTool: 0, printing: 0, donation: 0, other: 0 },
   deductions: { healthInsurance: 0, nursingInsurance: 0, pension: 0, employmentInsurance: 0, incomeTax: 0, residentTax: 0, other: 0 },
   bonus: 0,
   spouseIncome: 0,
@@ -1091,13 +1093,17 @@ function IncomeTab({ data, updateData }) {
     setSaved(false);
   }, [month, data.salaries]);
 
-  const setA = (field) => (val) => setForm((f) => ({ ...f, allowances: { ...f.allowances, [field]: val } }));
-  const setD = (field) => (val) => setForm((f) => ({ ...f, deductions: { ...f.deductions, [field]: val } }));
+  const setA  = (field) => (val) => setForm((f) => ({ ...f, allowances:      { ...f.allowances,      [field]: val } }));
+  const setD  = (field) => (val) => setForm((f) => ({ ...f, deductions:      { ...f.deductions,      [field]: val } }));
+  const setBI = (field) => (val) => setForm((f) => ({ ...f, businessIncome:  { ...(f.businessIncome  || {}), [field]: val } }));
+  const setGD = (field) => (val) => setForm((f) => ({ ...f, generalDeductions: { ...(f.generalDeductions || {}), [field]: val } }));
 
-  const grossPay = form.basicSalary + Object.values(form.allowances).reduce((a, b) => a + b, 0);
-  const totalDed = Object.values(form.deductions).reduce((a, b) => a + b, 0);
-  const netPay = grossPay - totalDed;
-  const totalIncome = netPay + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
+  const grossPay    = form.basicSalary + Object.values(form.allowances).reduce((a, b) => a + b, 0);
+  const totalBI     = Object.values(form.businessIncome  || {}).reduce((a, b) => a + b, 0);
+  const totalGD     = Object.values(form.generalDeductions || {}).reduce((a, b) => a + b, 0);
+  const totalDed    = Object.values(form.deductions).reduce((a, b) => a + b, 0);
+  const netPay      = grossPay - totalDed;
+  const totalIncome = netPay + totalBI - totalGD + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
 
   // 固定費（カテゴリで自動判定：住居費・通信費・保険料）
   const fixedExpenses = data.expenses
@@ -1130,7 +1136,7 @@ function IncomeTab({ data, updateData }) {
       const basic = s ? (s.basicSalary - Object.values(s.deductions || {}).reduce((a, b) => a + b, 0)) : 0;
       months.push({
         month: `${d.getMonth() + 1}月`,
-        手取り: Math.max(0, basic + (s?.bonus || 0) + (s?.spouseIncome || 0) + (s?.sideIncome || 0)),
+        手取り: Math.max(0, basic + (s?.bonus || 0) + (s?.spouseIncome || 0) + (s?.sideIncome || 0) + Object.values(s?.businessIncome || {}).reduce((a,b)=>a+b,0) - Object.values(s?.generalDeductions || {}).reduce((a,b)=>a+b,0)),
         基本給: Math.max(0, basic),
         配偶者収入: s?.spouseIncome || 0,
         ボーナス: s?.bonus || 0,
@@ -1177,6 +1183,43 @@ function IncomeTab({ data, updateData }) {
           </Accordion>
         </Card>
 
+        {/* 事業所得セクション */}
+        <Card>
+          <Accordion title="【事業所得】" defaultOpen={false}>
+            <AmountInput label="初年度手数料"     value={(form.businessIncome||{}).firstYearFee||0}          onChange={setBI("firstYearFee")} />
+            <AmountInput label="継続手数料"       value={(form.businessIncome||{}).renewalFee||0}            onChange={setBI("renewalFee")} />
+            <AmountInput label="保全フィー"       value={(form.businessIncome||{}).conservationFee||0}       onChange={setBI("conservationFee")} />
+            <AmountInput label="損保手数料"       value={(form.businessIncome||{}).nonLifeFee||0}            onChange={setBI("nonLifeFee")} />
+            <AmountInput label="通勤手当"         value={(form.businessIncome||{}).commuting||0}             onChange={setBI("commuting")} />
+            <AmountInput label="自動車保険補助"   value={(form.businessIncome||{}).carInsuranceSubsidy||0}   onChange={setBI("carInsuranceSubsidy")} />
+            <AmountInput label="消費税調整"       value={(form.businessIncome||{}).taxAdjustment||0}         onChange={setBI("taxAdjustment")} />
+            <AmountInput label="残高比例手数料"   value={(form.businessIncome||{}).balanceFee||0}            onChange={setBI("balanceFee")} />
+            <AmountInput label="その他"           value={(form.businessIncome||{}).other||0}                 onChange={setBI("other")} />
+            <Divider />
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>事業所得合計</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: "#E67E22" }}>+{fmtYen(totalBI)}</span>
+            </div>
+          </Accordion>
+        </Card>
+
+        {/* 一般控除セクション */}
+        <Card>
+          <Accordion title="【一般控除】" defaultOpen={false}>
+            <AmountInput label="グループ保険料"     value={(form.generalDeductions||{}).groupInsurance||0}  onChange={setGD("groupInsurance")} />
+            <AmountInput label="ノベルティ購入"     value={(form.generalDeductions||{}).novelty||0}         onChange={setGD("novelty")} />
+            <AmountInput label="営業ツール利用料"   value={(form.generalDeductions||{}).salesTool||0}        onChange={setGD("salesTool")} />
+            <AmountInput label="印刷代"             value={(form.generalDeductions||{}).printing||0}        onChange={setGD("printing")} />
+            <AmountInput label="社会貢献募金"       value={(form.generalDeductions||{}).donation||0}        onChange={setGD("donation")} />
+            <AmountInput label="その他"             value={(form.generalDeductions||{}).other||0}           onChange={setGD("other")} />
+            <Divider />
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>一般控除合計</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: colors.expense }}>-{fmtYen(totalGD)}</span>
+            </div>
+          </Accordion>
+        </Card>
+
         {/* 控除セクション */}
         <Card>
           <Accordion title="【控除】" defaultOpen={true}>
@@ -1201,6 +1244,18 @@ function IncomeTab({ data, updateData }) {
             <div style={{ fontSize: 13, color: colors.textLight, marginBottom: 4 }}>差引支給額（手取り）</div>
             <div style={{ fontSize: 32, fontWeight: 800, color: colors.income }}>{fmtYen(netPay)}</div>
           </div>
+          {totalBI > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid #C8E6C9" }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>＋ 事業所得</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#E67E22" }}>+{fmtYen(totalBI)}</span>
+            </div>
+          )}
+          {totalGD > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>− 一般控除</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: colors.expense }}>-{fmtYen(totalGD)}</span>
+            </div>
+          )}
         </Card>
 
         {/* 配偶者収入・ボーナス・副収入 */}
@@ -3663,7 +3718,7 @@ function FinancialTab({ data }) {
     if (!s) return 0;
     const gross = s.basicSalary + Object.values(s.allowances || {}).reduce((a, b) => a + b, 0);
     const ded   = Object.values(s.deductions || {}).reduce((a, b) => a + b, 0);
-    return Math.max(0, gross - ded) + (s.bonus || 0) + (s.spouseIncome || 0) + (s.sideIncome || 0);
+    return Math.max(0, gross - ded) + (s.bonus || 0) + (s.spouseIncome || 0) + (s.sideIncome || 0) + Object.values(s.businessIncome || {}).reduce((a,b)=>a+b,0) - Object.values(s.generalDeductions || {}).reduce((a,b)=>a+b,0);
   };
   const getMonthExpense = (ym) => data.expenses.filter((e) => e.date?.startsWith(ym)).reduce((a, e) => a + e.amount, 0);
   const isFixedCat = (cat) => EXPENSE_CATS.find((c) => c.name === cat)?.isFixed || false;

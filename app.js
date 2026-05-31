@@ -1125,7 +1125,11 @@ function HomeTab(_ref16) {
   var totalDeductions = thisSalary ? Object.values(thisSalary.deductions || {}).reduce(function (a, b) {
     return a + b;
   }, 0) : 0;
-  var netIncome = grossIncome - totalDeductions + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.bonus) || 0) + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.spouseIncome) || 0) + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.sideIncome) || 0);
+  var netIncome = grossIncome - totalDeductions + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.bonus) || 0) + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.spouseIncome) || 0) + ((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.sideIncome) || 0) + Object.values((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.businessIncome) || {}).reduce(function (a, b) {
+    return a + b;
+  }, 0) - Object.values((thisSalary === null || thisSalary === void 0 ? void 0 : thisSalary.generalDeductions) || {}).reduce(function (a, b) {
+    return a + b;
+  }, 0);
 
   // 今月の支出
   var monthExpenses = data.expenses.filter(function (e) {
@@ -1162,7 +1166,11 @@ function HomeTab(_ref16) {
     return a + b;
   }, 0) - Object.values(prevSalary.deductions || {}).reduce(function (a, b) {
     return a + b;
-  }, 0) + (prevSalary.bonus || 0) + (prevSalary.spouseIncome || 0) + (prevSalary.sideIncome || 0) : netIncome;
+  }, 0) + (prevSalary.bonus || 0) + (prevSalary.spouseIncome || 0) + (prevSalary.sideIncome || 0) + Object.values(prevSalary.businessIncome || {}).reduce(function (a, b) {
+    return a + b;
+  }, 0) - Object.values(prevSalary.generalDeductions || {}).reduce(function (a, b) {
+    return a + b;
+  }, 0) : netIncome;
   var prevExpense = data.expenses.filter(function (e) {
     var _e$date2;
     return (_e$date2 = e.date) === null || _e$date2 === void 0 ? void 0 : _e$date2.startsWith(prevMonth);
@@ -1264,7 +1272,11 @@ function HomeTab(_ref16) {
   var cardDed = cardSalary ? Object.values(cardSalary.deductions || {}).reduce(function (a, b) {
     return a + b;
   }, 0) : 0;
-  var cardNet = cardGross - cardDed + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.bonus) || 0) + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.spouseIncome) || 0) + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.sideIncome) || 0);
+  var cardNet = cardGross - cardDed + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.bonus) || 0) + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.spouseIncome) || 0) + ((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.sideIncome) || 0) + Object.values((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.businessIncome) || {}).reduce(function (a, b) {
+    return a + b;
+  }, 0) - Object.values((cardSalary === null || cardSalary === void 0 ? void 0 : cardSalary.generalDeductions) || {}).reduce(function (a, b) {
+    return a + b;
+  }, 0);
   var cardExpense = data.expenses.filter(function (e) {
     var _e$date3;
     return (_e$date3 = e.date) === null || _e$date3 === void 0 ? void 0 : _e$date3.startsWith(cardMonth);
@@ -1807,6 +1819,25 @@ var blankSalary = function blankSalary() {
       family: 0,
       other: 0
     },
+    businessIncome: {
+      firstYearFee: 0,
+      renewalFee: 0,
+      conservationFee: 0,
+      nonLifeFee: 0,
+      commuting: 0,
+      carInsuranceSubsidy: 0,
+      taxAdjustment: 0,
+      balanceFee: 0,
+      other: 0
+    },
+    generalDeductions: {
+      groupInsurance: 0,
+      novelty: 0,
+      salesTool: 0,
+      printing: 0,
+      donation: 0,
+      other: 0
+    },
     deductions: {
       healthInsurance: 0,
       nursingInsurance: 0,
@@ -1892,14 +1923,38 @@ function IncomeTab(_ref21) {
       });
     };
   };
+  var setBI = function setBI(field) {
+    return function (val) {
+      return setForm(function (f) {
+        return _objectSpread(_objectSpread({}, f), {}, {
+          businessIncome: _objectSpread(_objectSpread({}, f.businessIncome || {}), {}, _defineProperty({}, field, val))
+        });
+      });
+    };
+  };
+  var setGD = function setGD(field) {
+    return function (val) {
+      return setForm(function (f) {
+        return _objectSpread(_objectSpread({}, f), {}, {
+          generalDeductions: _objectSpread(_objectSpread({}, f.generalDeductions || {}), {}, _defineProperty({}, field, val))
+        });
+      });
+    };
+  };
   var grossPay = form.basicSalary + Object.values(form.allowances).reduce(function (a, b) {
+    return a + b;
+  }, 0);
+  var totalBI = Object.values(form.businessIncome || {}).reduce(function (a, b) {
+    return a + b;
+  }, 0);
+  var totalGD = Object.values(form.generalDeductions || {}).reduce(function (a, b) {
     return a + b;
   }, 0);
   var totalDed = Object.values(form.deductions).reduce(function (a, b) {
     return a + b;
   }, 0);
   var netPay = grossPay - totalDed;
-  var totalIncome = netPay + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
+  var totalIncome = netPay + totalBI - totalGD + (form.bonus || 0) + (form.spouseIncome || 0) + (form.sideIncome || 0);
 
   // 固定費（カテゴリで自動判定：住居費・通信費・保険料）
   var fixedExpenses = data.expenses.filter(function (e) {
@@ -1952,7 +2007,11 @@ function IncomeTab(_ref21) {
       }, 0) : 0;
       months.push({
         month: "".concat(d.getMonth() + 1, "\u6708"),
-        手取り: Math.max(0, basic + ((s === null || s === void 0 ? void 0 : s.bonus) || 0) + ((s === null || s === void 0 ? void 0 : s.spouseIncome) || 0) + ((s === null || s === void 0 ? void 0 : s.sideIncome) || 0)),
+        手取り: Math.max(0, basic + ((s === null || s === void 0 ? void 0 : s.bonus) || 0) + ((s === null || s === void 0 ? void 0 : s.spouseIncome) || 0) + ((s === null || s === void 0 ? void 0 : s.sideIncome) || 0) + Object.values((s === null || s === void 0 ? void 0 : s.businessIncome) || {}).reduce(function (a, b) {
+          return a + b;
+        }, 0) - Object.values((s === null || s === void 0 ? void 0 : s.generalDeductions) || {}).reduce(function (a, b) {
+          return a + b;
+        }, 0)),
         基本給: Math.max(0, basic),
         配偶者収入: (s === null || s === void 0 ? void 0 : s.spouseIncome) || 0,
         ボーナス: (s === null || s === void 0 ? void 0 : s.bonus) || 0,
@@ -2052,6 +2111,106 @@ function IncomeTab(_ref21) {
       color: colors.income
     }
   }, fmtYen(grossPay))))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(Accordion, {
+    title: "\u3010\u4E8B\u696D\u6240\u5F97\u3011",
+    defaultOpen: false
+  }, /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u521D\u5E74\u5EA6\u624B\u6570\u6599",
+    value: (form.businessIncome || {}).firstYearFee || 0,
+    onChange: setBI("firstYearFee")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u7D99\u7D9A\u624B\u6570\u6599",
+    value: (form.businessIncome || {}).renewalFee || 0,
+    onChange: setBI("renewalFee")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u4FDD\u5168\u30D5\u30A3\u30FC",
+    value: (form.businessIncome || {}).conservationFee || 0,
+    onChange: setBI("conservationFee")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u640D\u4FDD\u624B\u6570\u6599",
+    value: (form.businessIncome || {}).nonLifeFee || 0,
+    onChange: setBI("nonLifeFee")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u901A\u52E4\u624B\u5F53",
+    value: (form.businessIncome || {}).commuting || 0,
+    onChange: setBI("commuting")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u81EA\u52D5\u8ECA\u4FDD\u967A\u88DC\u52A9",
+    value: (form.businessIncome || {}).carInsuranceSubsidy || 0,
+    onChange: setBI("carInsuranceSubsidy")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u6D88\u8CBB\u7A0E\u8ABF\u6574",
+    value: (form.businessIncome || {}).taxAdjustment || 0,
+    onChange: setBI("taxAdjustment")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u6B8B\u9AD8\u6BD4\u4F8B\u624B\u6570\u6599",
+    value: (form.businessIncome || {}).balanceFee || 0,
+    onChange: setBI("balanceFee")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u305D\u306E\u4ED6",
+    value: (form.businessIncome || {}).other || 0,
+    onChange: setBI("other")
+  }), /*#__PURE__*/React.createElement(Divider, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      padding: "4px 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "\u4E8B\u696D\u6240\u5F97\u5408\u8A08"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 18,
+      fontWeight: 700,
+      color: "#E67E22"
+    }
+  }, "+", fmtYen(totalBI))))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(Accordion, {
+    title: "\u3010\u4E00\u822C\u63A7\u9664\u3011",
+    defaultOpen: false
+  }, /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u30B0\u30EB\u30FC\u30D7\u4FDD\u967A\u6599",
+    value: (form.generalDeductions || {}).groupInsurance || 0,
+    onChange: setGD("groupInsurance")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u30CE\u30D9\u30EB\u30C6\u30A3\u8CFC\u5165",
+    value: (form.generalDeductions || {}).novelty || 0,
+    onChange: setGD("novelty")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u55B6\u696D\u30C4\u30FC\u30EB\u5229\u7528\u6599",
+    value: (form.generalDeductions || {}).salesTool || 0,
+    onChange: setGD("salesTool")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u5370\u5237\u4EE3",
+    value: (form.generalDeductions || {}).printing || 0,
+    onChange: setGD("printing")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u793E\u4F1A\u8CA2\u732E\u52DF\u91D1",
+    value: (form.generalDeductions || {}).donation || 0,
+    onChange: setGD("donation")
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u305D\u306E\u4ED6",
+    value: (form.generalDeductions || {}).other || 0,
+    onChange: setGD("other")
+  }), /*#__PURE__*/React.createElement(Divider, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      padding: "4px 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "\u4E00\u822C\u63A7\u9664\u5408\u8A08"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 18,
+      fontWeight: 700,
+      color: colors.expense
+    }
+  }, "-", fmtYen(totalGD))))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(Accordion, {
     title: "\u3010\u63A7\u9664\u3011",
     defaultOpen: true
   }, /*#__PURE__*/React.createElement(AmountInput, {
@@ -2120,7 +2279,43 @@ function IncomeTab(_ref21) {
       fontWeight: 800,
       color: colors.income
     }
-  }, fmtYen(netPay)))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+  }, fmtYen(netPay))), totalBI > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginTop: 8,
+      paddingTop: 8,
+      borderTop: "1px solid #C8E6C9"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: colors.textLight
+    }
+  }, "\uFF0B \u4E8B\u696D\u6240\u5F97"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: "#E67E22"
+    }
+  }, "+", fmtYen(totalBI))), totalGD > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: colors.textLight
+    }
+  }, "\u2212 \u4E00\u822C\u63A7\u9664"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: colors.expense
+    }
+  }, "-", fmtYen(totalGD)))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
     title: "\u914D\u5076\u8005\u53CE\u5165\u30FB\u30DC\u30FC\u30CA\u30B9\u30FB\u526F\u53CE\u5165"
   }), /*#__PURE__*/React.createElement(AmountInput, {
     label: "\u914D\u5076\u8005\u53CE\u5165\uFF08\u624B\u53D6\u308A\uFF09",
@@ -7706,7 +7901,11 @@ function FinancialTab(_ref53) {
     var ded = Object.values(s.deductions || {}).reduce(function (a, b) {
       return a + b;
     }, 0);
-    return Math.max(0, gross - ded) + (s.bonus || 0) + (s.spouseIncome || 0) + (s.sideIncome || 0);
+    return Math.max(0, gross - ded) + (s.bonus || 0) + (s.spouseIncome || 0) + (s.sideIncome || 0) + Object.values(s.businessIncome || {}).reduce(function (a, b) {
+      return a + b;
+    }, 0) - Object.values(s.generalDeductions || {}).reduce(function (a, b) {
+      return a + b;
+    }, 0);
   };
   var getMonthExpense = function getMonthExpense(ym) {
     return data.expenses.filter(function (e) {
