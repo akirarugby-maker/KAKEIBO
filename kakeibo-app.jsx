@@ -1782,6 +1782,26 @@ function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate })
   const [inputVal, setInputVal] = useState(0);
   const [showAddCat, setShowAddCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
+  const [copiedFromPrev, setCopiedFromPrev] = useState(false);
+
+  // 27日で当月未入力の場合、前月27日のデータを自動コピー
+  React.useEffect(() => {
+    if (d !== 27) return;
+    const todayExps = data.expenses.filter((e) => e.date === currentDate);
+    if (todayExps.length > 0) return;
+    const prevYM = mm === 1 ? `${y - 1}-12` : `${y}-${String(mm - 1).padStart(2, "0")}`;
+    const prevDate = `${prevYM}-27`;
+    const prevExps = data.expenses.filter((e) => e.date === prevDate);
+    if (prevExps.length === 0) return;
+    updateData((prev) => {
+      const already = prev.expenses.filter((e) => e.date === currentDate);
+      if (already.length > 0) return prev;
+      const copied = prevExps.map((e) => ({ ...e, id: genId(), date: currentDate }));
+      return { ...prev, expenses: [...prev.expenses, ...copied] };
+    });
+    setCopiedFromPrev(true);
+    setTimeout(() => setCopiedFromPrev(false), 3000);
+  }, [currentDate]);
 
   // 資産管理からの月額参照（投資カテゴリのデフォルト値）
   const investDefaults = {
@@ -1849,6 +1869,11 @@ function ExpenseDayDetailWrapper({ date, data, updateData, onBack, onNavigate })
       </div>
 
       {/* 日合計バー */}
+      {copiedFromPrev && (
+        <div style={{ margin: "0 16px 8px", padding: "8px 14px", backgroundColor: "#E8F5E9", border: "1.5px solid #4CAF50", borderRadius: 10, fontSize: 12, color: "#2E7D32", fontWeight: 600 }}>
+          📋 前月27日の支払内容を自動コピーしました。金額を確認してください。
+        </div>
+      )}
       <div style={{ padding: "0 16px 10px" }}>
         <div style={{
           backgroundColor: "#FFF5F5", border: `1.5px solid ${colors.expense}`, borderRadius: 12,
