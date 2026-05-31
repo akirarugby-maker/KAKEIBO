@@ -4309,6 +4309,30 @@ function LoanList(_ref32) {
   var totalMonthly = data.loans.reduce(function (a, l) {
     return a + l.monthlyPayment;
   }, 0);
+  var moveUp = function moveUp(idx) {
+    return updateData(function (prev) {
+      if (idx === 0) return prev;
+      var loans = _toConsumableArray(prev.loans);
+      var _ref33 = [loans[idx], loans[idx - 1]];
+      loans[idx - 1] = _ref33[0];
+      loans[idx] = _ref33[1];
+      return _objectSpread(_objectSpread({}, prev), {}, {
+        loans: loans
+      });
+    });
+  };
+  var moveDown = function moveDown(idx) {
+    return updateData(function (prev) {
+      if (idx === prev.loans.length - 1) return prev;
+      var loans = _toConsumableArray(prev.loans);
+      var _ref34 = [loans[idx + 1], loans[idx]];
+      loans[idx] = _ref34[0];
+      loans[idx + 1] = _ref34[1];
+      return _objectSpread(_objectSpread({}, prev), {}, {
+        loans: loans
+      });
+    });
+  };
 
   // n年後の残高を計算（元利均等返済）
   var balanceAfterMonths = function balanceAfterMonths(loan, months) {
@@ -4406,9 +4430,9 @@ function LoanList(_ref32) {
   }, {
     label: "10年後",
     val: total10y
-  }].map(function (_ref33) {
-    var label = _ref33.label,
-      val = _ref33.val;
+  }].map(function (_ref35) {
+    var label = _ref35.label,
+      val = _ref35.val;
     return /*#__PURE__*/React.createElement("div", {
       key: label,
       style: {
@@ -4501,7 +4525,7 @@ function LoanList(_ref32) {
         color: b10 > 0 ? colors.loan : colors.income
       }
     }, b10 > 0 ? fmtYen(b10) : "完済"))));
-  })))), data.loans.map(function (loan) {
+  })))), data.loans.map(function (loan, idx) {
     var monthsLeft = loan.monthlyPayment > 0 ? Math.ceil(loan.remainingBalance / loan.monthlyPayment) : 0;
     var progress = loan.totalAmount > 0 ? (1 - loan.remainingBalance / loan.totalAmount) * 100 : 0;
     return /*#__PURE__*/React.createElement(Card, {
@@ -4526,9 +4550,48 @@ function LoanList(_ref32) {
     }, loan.name)), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        gap: 8
+        gap: 6,
+        alignItems: "center"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        gap: 2
       }
     }, /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return moveUp(idx);
+      },
+      disabled: idx === 0,
+      style: {
+        width: 26,
+        height: 22,
+        backgroundColor: idx === 0 ? "#EEE" : "#F0F4FF",
+        border: "none",
+        borderRadius: 4,
+        fontSize: 11,
+        cursor: idx === 0 ? "default" : "pointer",
+        color: idx === 0 ? "#BBB" : colors.saving,
+        lineHeight: 1
+      }
+    }, "\u25B2"), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return moveDown(idx);
+      },
+      disabled: idx === data.loans.length - 1,
+      style: {
+        width: 26,
+        height: 22,
+        backgroundColor: idx === data.loans.length - 1 ? "#EEE" : "#F0F4FF",
+        border: "none",
+        borderRadius: 4,
+        fontSize: 11,
+        cursor: idx === data.loans.length - 1 ? "default" : "pointer",
+        color: idx === data.loans.length - 1 ? "#BBB" : colors.saving,
+        lineHeight: 1
+      }
+    }, "\u25BC")), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
         setEditingLoanId(loan.id);
         setSubtab("登録");
@@ -4637,12 +4700,12 @@ function LoanList(_ref32) {
 }
 
 // ローン登録・編集フォーム（editingLoanId があれば編集モード）
-function LoanForm(_ref34) {
-  var data = _ref34.data,
-    updateData = _ref34.updateData,
-    setSubtab = _ref34.setSubtab,
-    editingLoanId = _ref34.editingLoanId,
-    setEditingLoanId = _ref34.setEditingLoanId;
+function LoanForm(_ref36) {
+  var data = _ref36.data,
+    updateData = _ref36.updateData,
+    setSubtab = _ref36.setSubtab,
+    editingLoanId = _ref36.editingLoanId,
+    setEditingLoanId = _ref36.setEditingLoanId;
   var editTarget = editingLoanId ? data.loans.find(function (l) {
     return l.id === editingLoanId;
   }) : null;
@@ -4845,10 +4908,10 @@ function LoanForm(_ref34) {
 }
 
 // 返済スケジュール表
-function LoanSchedule(_ref35) {
-  var data = _ref35.data,
-    selectedLoan = _ref35.selectedLoan,
-    setSelectedLoan = _ref35.setSelectedLoan;
+function LoanSchedule(_ref37) {
+  var data = _ref37.data,
+    selectedLoan = _ref37.selectedLoan,
+    setSelectedLoan = _ref37.setSelectedLoan;
   var loan = data.loans.find(function (l) {
     return l.id === selectedLoan;
   }) || data.loans[0];
@@ -5027,10 +5090,10 @@ function LoanSchedule(_ref35) {
 }
 
 // 繰上返済シミュレーター
-function LoanPrepay(_ref36) {
-  var data = _ref36.data,
-    selectedLoan = _ref36.selectedLoan,
-    setSelectedLoan = _ref36.setSelectedLoan;
+function LoanPrepay(_ref38) {
+  var data = _ref38.data,
+    selectedLoan = _ref38.selectedLoan,
+    setSelectedLoan = _ref38.setSelectedLoan;
   var _useState61 = useState(0),
     _useState62 = _slicedToArray(_useState61, 2),
     prepayAmount = _useState62[0],
@@ -5241,9 +5304,9 @@ function LoanPrepay(_ref36) {
 // ===== フェーズ9〜11: 資産タブ =====
 
 var ASSET_SUBTABS = ["銀行・現金", "NISA", "iDeCo", "変額年金", "その他", "総資産"];
-function AssetTab(_ref37) {
-  var data = _ref37.data,
-    updateData = _ref37.updateData;
+function AssetTab(_ref39) {
+  var data = _ref39.data,
+    updateData = _ref39.updateData;
   var _useState65 = useState("銀行・現金"),
     _useState66 = _slicedToArray(_useState65, 2),
     subtab = _useState66[0],
@@ -5300,9 +5363,9 @@ function AssetTab(_ref37) {
 }
 
 // 銀行・現金
-function BankTab(_ref38) {
-  var data = _ref38.data,
-    updateData = _ref38.updateData;
+function BankTab(_ref40) {
+  var data = _ref40.data,
+    updateData = _ref40.updateData;
   var _useState67 = useState(null),
     _useState68 = _slicedToArray(_useState67, 2),
     editingId = _useState68[0],
@@ -5533,9 +5596,9 @@ function BankTab(_ref38) {
 }
 
 // 株式・投信
-function InvestTab(_ref39) {
-  var data = _ref39.data,
-    updateData = _ref39.updateData;
+function InvestTab(_ref41) {
+  var data = _ref41.data,
+    updateData = _ref41.updateData;
   var _useState73 = useState(false),
     _useState74 = _slicedToArray(_useState73, 2),
     showAdd = _useState74[0],
@@ -5841,9 +5904,9 @@ function InvestTab(_ref39) {
 }
 
 // NISA管理（投信登録・枠管理・総資産連携）
-function NisaTab(_ref40) {
-  var data = _ref40.data,
-    updateData = _ref40.updateData;
+function NisaTab(_ref42) {
+  var data = _ref42.data,
+    updateData = _ref42.updateData;
   var nisa = data.assets.nisa || {};
   var year = nisa.year || new Date().getFullYear();
   var LIMITS = {
@@ -5987,11 +6050,11 @@ function NisaTab(_ref40) {
       color: colors.textLight,
       marginBottom: 12
     }
-  }, "\u203B \u67A0\u4F7F\u7528\u984D\u306F\u767B\u9332\u9298\u67C4\u306E\u53D6\u5F97\u984D\u304B\u3089\u81EA\u52D5\u8A08\u7B97\u3002\u751F\u6DAF\u67A0\u306F\u3064\u307F\u305F\u3066\uFF0B\u6210\u9577\u306E\u5408\u8A08\u3067\u3059\u3002"), sections.map(function (_ref41) {
-    var label = _ref41.label,
-      used = _ref41.used,
-      limit = _ref41.limit,
-      color = _ref41.color;
+  }, "\u203B \u67A0\u4F7F\u7528\u984D\u306F\u767B\u9332\u9298\u67C4\u306E\u53D6\u5F97\u984D\u304B\u3089\u81EA\u52D5\u8A08\u7B97\u3002\u751F\u6DAF\u67A0\u306F\u3064\u307F\u305F\u3066\uFF0B\u6210\u9577\u306E\u5408\u8A08\u3067\u3059\u3002"), sections.map(function (_ref43) {
+    var label = _ref43.label,
+      used = _ref43.used,
+      limit = _ref43.limit,
+      color = _ref43.color;
     var remaining = limit - used;
     return /*#__PURE__*/React.createElement("div", {
       key: label,
@@ -6280,9 +6343,9 @@ function NisaTab(_ref40) {
 }
 
 // iDeCo管理
-function IdecoTab(_ref42) {
-  var data = _ref42.data,
-    updateData = _ref42.updateData;
+function IdecoTab(_ref44) {
+  var data = _ref44.data,
+    updateData = _ref44.updateData;
   var ideco = data.assets.ideco || {};
   var F = function F(field) {
     return function (val) {
@@ -6408,9 +6471,9 @@ function IdecoTab(_ref42) {
 }
 
 // 変額年金保険
-function AnnuityTab(_ref43) {
-  var data = _ref43.data,
-    updateData = _ref43.updateData;
+function AnnuityTab(_ref45) {
+  var data = _ref45.data,
+    updateData = _ref45.updateData;
   var _useState83 = useState(null),
     _useState84 = _slicedToArray(_useState83, 2),
     editingId = _useState84[0],
@@ -6676,9 +6739,9 @@ function AnnuityTab(_ref43) {
 }
 
 // その他資産
-function OtherAssetsTab(_ref44) {
-  var data = _ref44.data,
-    updateData = _ref44.updateData;
+function OtherAssetsTab(_ref46) {
+  var data = _ref46.data,
+    updateData = _ref46.updateData;
   var items = data.assets.otherAssets || [];
   var blankForm = function blankForm() {
     return {
@@ -6897,9 +6960,9 @@ function OtherAssetsTab(_ref44) {
 }
 
 // 総資産・純資産
-function NetWorthTab(_ref45) {
+function NetWorthTab(_ref47) {
   var _data$assets$nisa4, _data$assets$ideco4;
-  var data = _ref45.data;
+  var data = _ref47.data;
   var bankTotal = (data.assets.bankAccounts || []).reduce(function (a, b) {
     return a + b.balance;
   }, 0);
@@ -6956,10 +7019,10 @@ function NetWorthTab(_ref45) {
     label: "変額年金",
     val: annuityVal,
     color: colors.asset
-  }].map(function (_ref46) {
-    var label = _ref46.label,
-      val = _ref46.val,
-      color = _ref46.color;
+  }].map(function (_ref48) {
+    var label = _ref48.label,
+      val = _ref48.val,
+      color = _ref48.color;
     return /*#__PURE__*/React.createElement("div", {
       key: label,
       style: {
@@ -7043,9 +7106,9 @@ function NetWorthTab(_ref45) {
     cy: "50%",
     outerRadius: 75,
     dataKey: "value",
-    label: function label(_ref47) {
-      var name = _ref47.name,
-        percent = _ref47.percent;
+    label: function label(_ref49) {
+      var name = _ref49.name,
+        percent = _ref49.percent;
       return percent > 0.05 ? "".concat(name, " ").concat(Math.round(percent * 100), "%") : "";
     },
     fontSize: 10
@@ -7064,9 +7127,9 @@ function NetWorthTab(_ref45) {
 // ===== フェーズ12・13: シミュレーションタブ =====
 
 var SIM_SUBTABS = ["将来資産", "ローン完済後", "老後資金", "FIRE試算"];
-function SimulationTab(_ref48) {
-  var data = _ref48.data,
-    updateData = _ref48.updateData;
+function SimulationTab(_ref50) {
+  var data = _ref50.data,
+    updateData = _ref50.updateData;
   var _useState93 = useState("将来資産"),
     _useState94 = _slicedToArray(_useState93, 2),
     subtab = _useState94[0],
@@ -7114,8 +7177,8 @@ function SimulationTab(_ref48) {
 }
 
 // 将来資産シミュレーター
-function FutureAssetSim(_ref49) {
-  var data = _ref49.data;
+function FutureAssetSim(_ref51) {
+  var data = _ref51.data;
   var totalAsset = function (_data$assets$nisa5, _data$assets$ideco5) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
@@ -7378,8 +7441,8 @@ function FutureAssetSim(_ref49) {
 }
 
 // ローン完済後シミュレーター
-function AfterLoanSim(_ref50) {
-  var data = _ref50.data;
+function AfterLoanSim(_ref52) {
+  var data = _ref52.data;
   var _useState103 = useState(5),
     _useState104 = _slicedToArray(_useState103, 2),
     rate = _useState104[0],
@@ -7538,8 +7601,8 @@ function AfterLoanSim(_ref50) {
 }
 
 // 老後資金シミュレーター
-function RetirementSim(_ref51) {
-  var data = _ref51.data;
+function RetirementSim(_ref53) {
+  var data = _ref53.data;
   var _useState105 = useState(35),
     _useState106 = _slicedToArray(_useState105, 2),
     age = _useState106[0],
@@ -7812,8 +7875,8 @@ function RetirementSim(_ref51) {
 }
 
 // FIRE試算
-function FireSim(_ref52) {
-  var data = _ref52.data;
+function FireSim(_ref54) {
+  var data = _ref54.data;
   var totalAsset = function (_data$assets$nisa7, _data$assets$ideco7) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
@@ -8089,9 +8152,9 @@ function FireSim(_ref52) {
 
 // ===== フェーズ15: CSV出力・JSONバックアップ =====
 
-function DataManagementPanel(_ref53) {
-  var data = _ref53.data,
-    updateData = _ref53.updateData;
+function DataManagementPanel(_ref55) {
+  var data = _ref55.data,
+    updateData = _ref55.updateData;
   var exportCSV = function exportCSV() {
     var header = "日付,カテゴリ,サブカテゴリ,金額,固定費,支払方法,メモ";
     var rows = data.expenses.map(function (e) {
@@ -8195,9 +8258,9 @@ function DataManagementPanel(_ref53) {
 }
 
 // ===== 財務諸表タブ =====
-function FinancialTab(_ref54) {
+function FinancialTab(_ref56) {
   var _data$assets$nisa8, _data$assets$ideco8;
-  var data = _ref54.data;
+  var data = _ref56.data;
   var _useState127 = useState(currentYM()),
     _useState128 = _slicedToArray(_useState127, 2),
     month = _useState128[0],
@@ -8542,12 +8605,12 @@ function FinancialTab(_ref54) {
     var varH = Math.round(varExp / maxVal * 180);
     var profitH = Math.max(Math.round(Math.abs(profit) / maxVal * 180), profit !== 0 ? 20 : 4);
     var isProfit = profit >= 0;
-    var Bar = function Bar(_ref55) {
-      var height = _ref55.height,
-        color = _ref55.color,
-        label = _ref55.label,
-        value = _ref55.value,
-        striped = _ref55.striped;
+    var Bar = function Bar(_ref57) {
+      var height = _ref57.height,
+        color = _ref57.color,
+        label = _ref57.label,
+        value = _ref57.value,
+        striped = _ref57.striped;
       return /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
@@ -8661,11 +8724,11 @@ function FinancialTab(_ref54) {
         color: colors.textLight,
         marginBottom: 6
       }
-    }, "\u8CBB\u7528\u5185\u8A33"), catBreakdown.map(function (_ref56) {
+    }, "\u8CBB\u7528\u5185\u8A33"), catBreakdown.map(function (_ref58) {
       var _expenseCategories$ca;
-      var _ref57 = _slicedToArray(_ref56, 2),
-        cat = _ref57[0],
-        amt = _ref57[1];
+      var _ref59 = _slicedToArray(_ref58, 2),
+        cat = _ref59[0],
+        amt = _ref59[1];
       var pct = expense > 0 ? amt / expense : 0;
       var catColor = ((_expenseCategories$ca = expenseCategories[cat]) === null || _expenseCategories$ca === void 0 ? void 0 : _expenseCategories$ca.color) || colors.neutral;
       return /*#__PURE__*/React.createElement("div", {

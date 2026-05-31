@@ -2153,6 +2153,19 @@ function LoanList({ data, updateData, setSubtab, setSelectedLoan, setEditingLoan
   const totalBalance = data.loans.reduce((a, l) => a + l.remainingBalance, 0);
   const totalMonthly = data.loans.reduce((a, l) => a + l.monthlyPayment, 0);
 
+  const moveUp   = (idx) => updateData((prev) => {
+    if (idx === 0) return prev;
+    const loans = [...prev.loans];
+    [loans[idx - 1], loans[idx]] = [loans[idx], loans[idx - 1]];
+    return { ...prev, loans };
+  });
+  const moveDown = (idx) => updateData((prev) => {
+    if (idx === prev.loans.length - 1) return prev;
+    const loans = [...prev.loans];
+    [loans[idx], loans[idx + 1]] = [loans[idx + 1], loans[idx]];
+    return { ...prev, loans };
+  });
+
   // n年後の残高を計算（元利均等返済）
   const balanceAfterMonths = (loan, months) => {
     const monthlyRate = loan.interestRate / 100 / 12;
@@ -2254,7 +2267,7 @@ function LoanList({ data, updateData, setSubtab, setSelectedLoan, setEditingLoan
         </>
       )}
 
-      {data.loans.map((loan) => {
+      {data.loans.map((loan, idx) => {
         const monthsLeft = loan.monthlyPayment > 0 ? Math.ceil(loan.remainingBalance / loan.monthlyPayment) : 0;
         const progress = loan.totalAmount > 0 ? (1 - loan.remainingBalance / loan.totalAmount) * 100 : 0;
         return (
@@ -2264,7 +2277,20 @@ function LoanList({ data, updateData, setSubtab, setSelectedLoan, setEditingLoan
                 <span style={{ fontSize: 20, marginRight: 6 }}>{LOAN_TYPE_ICON[loan.type] || "💰"}</span>
                 <span style={{ fontSize: 16, fontWeight: 700 }}>{loan.name}</span>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {/* 並べ替えボタン */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <button onClick={() => moveUp(idx)} disabled={idx === 0} style={{
+                    width: 26, height: 22, backgroundColor: idx === 0 ? "#EEE" : "#F0F4FF",
+                    border: "none", borderRadius: 4, fontSize: 11, cursor: idx === 0 ? "default" : "pointer",
+                    color: idx === 0 ? "#BBB" : colors.saving, lineHeight: 1,
+                  }}>▲</button>
+                  <button onClick={() => moveDown(idx)} disabled={idx === data.loans.length - 1} style={{
+                    width: 26, height: 22, backgroundColor: idx === data.loans.length - 1 ? "#EEE" : "#F0F4FF",
+                    border: "none", borderRadius: 4, fontSize: 11, cursor: idx === data.loans.length - 1 ? "default" : "pointer",
+                    color: idx === data.loans.length - 1 ? "#BBB" : colors.saving, lineHeight: 1,
+                  }}>▼</button>
+                </div>
                 <button onClick={() => { setEditingLoanId(loan.id); setSubtab("登録"); }}
                   style={{ background: "none", border: "none", color: colors.saving, cursor: "pointer", fontSize: 16 }}>✏️</button>
                 <button onClick={() => del(loan.id)}
