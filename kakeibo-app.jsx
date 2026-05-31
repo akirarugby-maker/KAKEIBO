@@ -85,6 +85,7 @@ const initialState = {
       startDate: "",
     },
     variableAnnuities: [],
+    otherAssets: [],
   },
   settings: {
     userName: "",
@@ -715,8 +716,9 @@ function HomeTab({ data, updateData }) {
   const bankTotal = (data.assets.bankAccounts || []).reduce((a, b) => a + b.balance, 0);
   const investTotal = (data.assets.nisa?.investments || []).reduce((a, i) => a + i.currentPrice * i.quantity, 0);
   const idecoVal = data.assets.ideco?.currentValue || 0;
-  const annuityVal = (data.assets.variableAnnuities || []).reduce((a, v) => a + v.currentValue, 0);
-  const totalAsset = bankTotal + investTotal + idecoVal + annuityVal;
+  const annuityVal    = (data.assets.variableAnnuities || []).reduce((a, v) => a + v.currentValue, 0);
+  const otherAssetVal = (data.assets.otherAssets || []).reduce((a, i) => a + (i.balance || 0), 0);
+  const totalAsset = bankTotal + investTotal + idecoVal + annuityVal + otherAssetVal;
   const totalLoan = (data.loans || []).reduce((a, l) => a + l.remainingBalance, 0);
   const netWorth = totalAsset - totalLoan;
 
@@ -2558,7 +2560,7 @@ function LoanPrepay({ data, selectedLoan, setSelectedLoan }) {
 
 // ===== フェーズ9〜11: 資産タブ =====
 
-const ASSET_SUBTABS = ["銀行・現金", "NISA", "iDeCo", "変額年金", "総資産"];
+const ASSET_SUBTABS = ["銀行・現金", "NISA", "iDeCo", "変額年金", "その他", "総資産"];
 
 function AssetTab({ data, updateData }) {
   const [subtab, setSubtab] = useState("銀行・現金");
@@ -2583,8 +2585,9 @@ function AssetTab({ data, updateData }) {
         {subtab === "銀行・現金" && <BankTab     data={data} updateData={updateData} />}
         {subtab === "NISA"      && <NisaTab     data={data} updateData={updateData} />}
         {subtab === "iDeCo"     && <IdecoTab    data={data} updateData={updateData} />}
-        {subtab === "変額年金"  && <AnnuityTab  data={data} updateData={updateData} />}
-        {subtab === "総資産"    && <NetWorthTab data={data} />}
+        {subtab === "変額年金"  && <AnnuityTab      data={data} updateData={updateData} />}
+        {subtab === "その他"    && <OtherAssetsTab  data={data} updateData={updateData} />}
+        {subtab === "総資産"    && <NetWorthTab     data={data} />}
       </div>
     </div>
   );
@@ -3135,13 +3138,111 @@ function AnnuityTab({ data, updateData }) {
   );
 }
 
+// その他資産
+function OtherAssetsTab({ data, updateData }) {
+  const items = data.assets.otherAssets || [];
+  const blankForm = () => ({ id: null, name: "", type: "その他", balance: 0, memo: "" });
+  const [form, setForm] = useState(blankForm());
+  const [showAdd, setShowAdd] = useState(false);
+  const F = (field) => (val) => setForm((f) => ({ ...f, [field]: val }));
+
+  const save = () => {
+    if (!form.name) return;
+    const entry = { ...form, id: form.id || genId(), balance: Number(form.balance) || 0 };
+    updateData((prev) => {
+      const list = prev.assets.otherAssets || [];
+      return {
+        ...prev,
+        assets: {
+          ...prev.assets,
+          otherAssets: form.id ? list.map((i) => i.id === form.id ? entry : i) : [...list, entry],
+        },
+      };
+    });
+    setForm(blankForm());
+    setShowAdd(false);
+  };
+
+  const del = (id) => updateData((prev) => ({
+    ...prev,
+    assets: { ...prev.assets, otherAssets: (prev.assets.otherAssets || []).filter((i) => i.id !== id) },
+  }));
+
+  const startEdit = (item) => { setForm({ ...item }); setShowAdd(true); };
+
+  const total = items.reduce((a, i) => a + (i.balance || 0), 0);
+
+  const TYPE_OPTIONS = ["現金・タンス預金", "貴金属・宝飾品", "美術品・骨董", "仮想通貨", "株式（未上場）", "生命保険（解約返戻金）", "その他"];
+
+  return (
+    <div>
+      <Card>
+        <SectionHeader title="その他資産" color={colors.asset} />
+        <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 10 }}>
+          銀行・NISA・iDeCo・変額年金以外の資産（現金・貴金属・保険解約返戻金など）
+        </div>
+        {items.length > 0 && (
+          <>
+            {items.map((item) => (
+              <div key={item.id} style={{
+                padding: "12px 14px", borderRadius: 12, marginBottom: 8,
+                backgroundColor: "#F8F8F8", border: "1.5px solid #EEE",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, color: colors.textLight, marginBottom: 2 }}>{item.type}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>{item.name}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: colors.asset }}>{fmtYen(item.balance)}</div>
+                    {item.memo && <div style={{ fontSize: 11, color: colors.textLight, marginTop: 4 }}>{item.memo}</div>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => startEdit(item)} style={{ padding: "6px 10px", backgroundColor: "#EEE", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>編集</button>
+                    <button onClick={() => del(item.id)} style={{ padding: "6px 10px", backgroundColor: "#FFEBEE", color: "#E74C3C", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>削除</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <Divider />
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 13, color: colors.textLight }}>その他資産合計</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: colors.asset }}>{fmtYen(total)}</span>
+            </div>
+          </>
+        )}
+        {items.length === 0 && !showAdd && <EmptyState message="その他資産が登録されていません" />}
+      </Card>
+
+      {showAdd && (
+        <Card>
+          <SectionHeader title={form.id ? "その他資産を編集" : "その他資産を追加"} color={colors.asset} />
+          <SelectInput label="種別" value={form.type} onChange={F("type")} options={TYPE_OPTIONS} />
+          <TextInput label="名称" value={form.name} onChange={F("name")} placeholder="例: タンス預金、金の指輪" />
+          <AmountInput label="現在の評価額（円）" value={form.balance} onChange={F("balance")} />
+          <TextInput label="メモ（任意）" value={form.memo} onChange={F("memo")} placeholder="保管場所・備考など" />
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <PrimaryButton onClick={save} color={colors.asset} style={{ flex: 1 }}>{form.id ? "更新する" : "追加する"}</PrimaryButton>
+            <OutlineButton onClick={() => { setForm(blankForm()); setShowAdd(false); }} color={colors.neutral} style={{ flex: 1 }}>キャンセル</OutlineButton>
+          </div>
+        </Card>
+      )}
+
+      {!showAdd && (
+        <PrimaryButton onClick={() => { setForm(blankForm()); setShowAdd(true); }} color={colors.asset}>
+          ＋ その他資産を追加
+        </PrimaryButton>
+      )}
+    </div>
+  );
+}
+
 // 総資産・純資産
 function NetWorthTab({ data }) {
   const bankTotal     = (data.assets.bankAccounts || []).reduce((a, b) => a + b.balance, 0);
   const nisaInvest    = (data.assets.nisa?.investments || []).reduce((a, i) => a + i.currentPrice * i.quantity, 0);
   const idecoVal      = data.assets.ideco?.currentValue || 0;
   const annuityVal    = (data.assets.variableAnnuities || []).reduce((a, v) => a + v.currentValue, 0);
-  const totalAsset    = bankTotal + nisaInvest + idecoVal + annuityVal;
+  const otherAssetVal = (data.assets.otherAssets || []).reduce((a, i) => a + (i.balance || 0), 0);
+  const totalAsset    = bankTotal + nisaInvest + idecoVal + annuityVal + otherAssetVal;
   const totalLoan     = (data.loans || []).reduce((a, l) => a + l.remainingBalance, 0);
   const netWorth      = totalAsset - totalLoan;
 
@@ -3761,8 +3862,9 @@ function FinancialTab({ data }) {
   const totalBank = (data.assets.bankAccounts || []).reduce((a, b) => a + (b.balance || 0), 0);
   const nisaVal = (data.assets.nisa?.investments || []).reduce((a, i) => a + (i.currentValue || 0), 0);
   const idecoVal = data.assets.ideco?.totalBalance || 0;
-  const annuityVal = (data.assets.variableAnnuities || []).reduce((a, v) => a + (v.currentValue || 0), 0);
-  const totalAsset = totalBank + nisaVal + idecoVal + annuityVal;
+  const annuityVal    = (data.assets.variableAnnuities || []).reduce((a, v) => a + (v.currentValue || 0), 0);
+  const otherAssetVal = (data.assets.otherAssets || []).reduce((a, i) => a + (i.balance || 0), 0);
+  const totalAsset = totalBank + nisaVal + idecoVal + annuityVal + otherAssetVal;
   const totalLiability = data.loans.reduce((a, l) => a + (l.remainingBalance || 0), 0);
   const netWorth = totalAsset - totalLiability;
 

@@ -106,7 +106,8 @@ var initialState = {
       currentValue: 0,
       startDate: ""
     },
-    variableAnnuities: []
+    variableAnnuities: [],
+    otherAssets: []
   },
   settings: {
     userName: "",
@@ -1152,7 +1153,10 @@ function HomeTab(_ref16) {
   var annuityVal = (data.assets.variableAnnuities || []).reduce(function (a, v) {
     return a + v.currentValue;
   }, 0);
-  var totalAsset = bankTotal + investTotal + idecoVal + annuityVal;
+  var otherAssetVal = (data.assets.otherAssets || []).reduce(function (a, i) {
+    return a + (i.balance || 0);
+  }, 0);
+  var totalAsset = bankTotal + investTotal + idecoVal + annuityVal + otherAssetVal;
   var totalLoan = (data.loans || []).reduce(function (a, l) {
     return a + l.remainingBalance;
   }, 0);
@@ -5236,7 +5240,7 @@ function LoanPrepay(_ref36) {
 
 // ===== フェーズ9〜11: 資産タブ =====
 
-var ASSET_SUBTABS = ["銀行・現金", "NISA", "iDeCo", "変額年金", "総資産"];
+var ASSET_SUBTABS = ["銀行・現金", "NISA", "iDeCo", "変額年金", "その他", "総資産"];
 function AssetTab(_ref37) {
   var data = _ref37.data,
     updateData = _ref37.updateData;
@@ -5285,6 +5289,9 @@ function AssetTab(_ref37) {
     data: data,
     updateData: updateData
   }), subtab === "変額年金" && /*#__PURE__*/React.createElement(AnnuityTab, {
+    data: data,
+    updateData: updateData
+  }), subtab === "その他" && /*#__PURE__*/React.createElement(OtherAssetsTab, {
     data: data,
     updateData: updateData
   }), subtab === "総資産" && /*#__PURE__*/React.createElement(NetWorthTab, {
@@ -6668,10 +6675,231 @@ function AnnuityTab(_ref43) {
   }, "\uFF0B \u5909\u984D\u5E74\u91D1\u4FDD\u967A\u3092\u8FFD\u52A0"));
 }
 
+// その他資産
+function OtherAssetsTab(_ref44) {
+  var data = _ref44.data,
+    updateData = _ref44.updateData;
+  var items = data.assets.otherAssets || [];
+  var blankForm = function blankForm() {
+    return {
+      id: null,
+      name: "",
+      type: "その他",
+      balance: 0,
+      memo: ""
+    };
+  };
+  var _useState89 = useState(blankForm()),
+    _useState90 = _slicedToArray(_useState89, 2),
+    form = _useState90[0],
+    setForm = _useState90[1];
+  var _useState91 = useState(false),
+    _useState92 = _slicedToArray(_useState91, 2),
+    showAdd = _useState92[0],
+    setShowAdd = _useState92[1];
+  var F = function F(field) {
+    return function (val) {
+      return setForm(function (f) {
+        return _objectSpread(_objectSpread({}, f), {}, _defineProperty({}, field, val));
+      });
+    };
+  };
+  var save = function save() {
+    if (!form.name) return;
+    var entry = _objectSpread(_objectSpread({}, form), {}, {
+      id: form.id || genId(),
+      balance: Number(form.balance) || 0
+    });
+    updateData(function (prev) {
+      var list = prev.assets.otherAssets || [];
+      return _objectSpread(_objectSpread({}, prev), {}, {
+        assets: _objectSpread(_objectSpread({}, prev.assets), {}, {
+          otherAssets: form.id ? list.map(function (i) {
+            return i.id === form.id ? entry : i;
+          }) : [].concat(_toConsumableArray(list), [entry])
+        })
+      });
+    });
+    setForm(blankForm());
+    setShowAdd(false);
+  };
+  var del = function del(id) {
+    return updateData(function (prev) {
+      return _objectSpread(_objectSpread({}, prev), {}, {
+        assets: _objectSpread(_objectSpread({}, prev.assets), {}, {
+          otherAssets: (prev.assets.otherAssets || []).filter(function (i) {
+            return i.id !== id;
+          })
+        })
+      });
+    });
+  };
+  var startEdit = function startEdit(item) {
+    setForm(_objectSpread({}, item));
+    setShowAdd(true);
+  };
+  var total = items.reduce(function (a, i) {
+    return a + (i.balance || 0);
+  }, 0);
+  var TYPE_OPTIONS = ["現金・タンス預金", "貴金属・宝飾品", "美術品・骨董", "仮想通貨", "株式（未上場）", "生命保険（解約返戻金）", "その他"];
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: "\u305D\u306E\u4ED6\u8CC7\u7523",
+    color: colors.asset
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: colors.textLight,
+      marginBottom: 10
+    }
+  }, "\u9280\u884C\u30FBNISA\u30FBiDeCo\u30FB\u5909\u984D\u5E74\u91D1\u4EE5\u5916\u306E\u8CC7\u7523\uFF08\u73FE\u91D1\u30FB\u8CB4\u91D1\u5C5E\u30FB\u4FDD\u967A\u89E3\u7D04\u8FD4\u623B\u91D1\u306A\u3069\uFF09"), items.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, items.map(function (item) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: item.id,
+      style: {
+        padding: "12px 14px",
+        borderRadius: 12,
+        marginBottom: 8,
+        backgroundColor: "#F8F8F8",
+        border: "1.5px solid #EEE"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: colors.textLight,
+        marginBottom: 2
+      }
+    }, item.type), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 15,
+        fontWeight: 700
+      }
+    }, item.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 18,
+        fontWeight: 800,
+        color: colors.asset
+      }
+    }, fmtYen(item.balance)), item.memo && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: colors.textLight,
+        marginTop: 4
+      }
+    }, item.memo)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6,
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return startEdit(item);
+      },
+      style: {
+        padding: "6px 10px",
+        backgroundColor: "#EEE",
+        border: "none",
+        borderRadius: 8,
+        fontSize: 12,
+        cursor: "pointer"
+      }
+    }, "\u7DE8\u96C6"), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return del(item.id);
+      },
+      style: {
+        padding: "6px 10px",
+        backgroundColor: "#FFEBEE",
+        color: "#E74C3C",
+        border: "none",
+        borderRadius: 8,
+        fontSize: 12,
+        cursor: "pointer"
+      }
+    }, "\u524A\u9664"))));
+  }), /*#__PURE__*/React.createElement(Divider, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: colors.textLight
+    }
+  }, "\u305D\u306E\u4ED6\u8CC7\u7523\u5408\u8A08"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 18,
+      fontWeight: 800,
+      color: colors.asset
+    }
+  }, fmtYen(total)))), items.length === 0 && !showAdd && /*#__PURE__*/React.createElement(EmptyState, {
+    message: "\u305D\u306E\u4ED6\u8CC7\u7523\u304C\u767B\u9332\u3055\u308C\u3066\u3044\u307E\u305B\u3093"
+  })), showAdd && /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionHeader, {
+    title: form.id ? "その他資産を編集" : "その他資産を追加",
+    color: colors.asset
+  }), /*#__PURE__*/React.createElement(SelectInput, {
+    label: "\u7A2E\u5225",
+    value: form.type,
+    onChange: F("type"),
+    options: TYPE_OPTIONS
+  }), /*#__PURE__*/React.createElement(TextInput, {
+    label: "\u540D\u79F0",
+    value: form.name,
+    onChange: F("name"),
+    placeholder: "\u4F8B: \u30BF\u30F3\u30B9\u9810\u91D1\u3001\u91D1\u306E\u6307\u8F2A"
+  }), /*#__PURE__*/React.createElement(AmountInput, {
+    label: "\u73FE\u5728\u306E\u8A55\u4FA1\u984D\uFF08\u5186\uFF09",
+    value: form.balance,
+    onChange: F("balance")
+  }), /*#__PURE__*/React.createElement(TextInput, {
+    label: "\u30E1\u30E2\uFF08\u4EFB\u610F\uFF09",
+    value: form.memo,
+    onChange: F("memo"),
+    placeholder: "\u4FDD\u7BA1\u5834\u6240\u30FB\u5099\u8003\u306A\u3069"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: save,
+    color: colors.asset,
+    style: {
+      flex: 1
+    }
+  }, form.id ? "更新する" : "追加する"), /*#__PURE__*/React.createElement(OutlineButton, {
+    onClick: function onClick() {
+      setForm(blankForm());
+      setShowAdd(false);
+    },
+    color: colors.neutral,
+    style: {
+      flex: 1
+    }
+  }, "\u30AD\u30E3\u30F3\u30BB\u30EB"))), !showAdd && /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: function onClick() {
+      setForm(blankForm());
+      setShowAdd(true);
+    },
+    color: colors.asset
+  }, "\uFF0B \u305D\u306E\u4ED6\u8CC7\u7523\u3092\u8FFD\u52A0"));
+}
+
 // 総資産・純資産
-function NetWorthTab(_ref44) {
+function NetWorthTab(_ref45) {
   var _data$assets$nisa4, _data$assets$ideco4;
-  var data = _ref44.data;
+  var data = _ref45.data;
   var bankTotal = (data.assets.bankAccounts || []).reduce(function (a, b) {
     return a + b.balance;
   }, 0);
@@ -6682,7 +6910,10 @@ function NetWorthTab(_ref44) {
   var annuityVal = (data.assets.variableAnnuities || []).reduce(function (a, v) {
     return a + v.currentValue;
   }, 0);
-  var totalAsset = bankTotal + nisaInvest + idecoVal + annuityVal;
+  var otherAssetVal = (data.assets.otherAssets || []).reduce(function (a, i) {
+    return a + (i.balance || 0);
+  }, 0);
+  var totalAsset = bankTotal + nisaInvest + idecoVal + annuityVal + otherAssetVal;
   var totalLoan = (data.loans || []).reduce(function (a, l) {
     return a + l.remainingBalance;
   }, 0);
@@ -6725,10 +6956,10 @@ function NetWorthTab(_ref44) {
     label: "変額年金",
     val: annuityVal,
     color: colors.asset
-  }].map(function (_ref45) {
-    var label = _ref45.label,
-      val = _ref45.val,
-      color = _ref45.color;
+  }].map(function (_ref46) {
+    var label = _ref46.label,
+      val = _ref46.val,
+      color = _ref46.color;
     return /*#__PURE__*/React.createElement("div", {
       key: label,
       style: {
@@ -6812,9 +7043,9 @@ function NetWorthTab(_ref44) {
     cy: "50%",
     outerRadius: 75,
     dataKey: "value",
-    label: function label(_ref46) {
-      var name = _ref46.name,
-        percent = _ref46.percent;
+    label: function label(_ref47) {
+      var name = _ref47.name,
+        percent = _ref47.percent;
       return percent > 0.05 ? "".concat(name, " ").concat(Math.round(percent * 100), "%") : "";
     },
     fontSize: 10
@@ -6833,13 +7064,13 @@ function NetWorthTab(_ref44) {
 // ===== フェーズ12・13: シミュレーションタブ =====
 
 var SIM_SUBTABS = ["将来資産", "ローン完済後", "老後資金", "FIRE試算"];
-function SimulationTab(_ref47) {
-  var data = _ref47.data,
-    updateData = _ref47.updateData;
-  var _useState89 = useState("将来資産"),
-    _useState90 = _slicedToArray(_useState89, 2),
-    subtab = _useState90[0],
-    setSubtab = _useState90[1];
+function SimulationTab(_ref48) {
+  var data = _ref48.data,
+    updateData = _ref48.updateData;
+  var _useState93 = useState("将来資産"),
+    _useState94 = _slicedToArray(_useState93, 2),
+    subtab = _useState94[0],
+    setSubtab = _useState94[1];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(PageTitle, {
     title: "\uD83D\uDD2E \u30B7\u30DF\u30E5\u30EC\u30FC\u30B7\u30E7\u30F3"
   }), /*#__PURE__*/React.createElement("div", {
@@ -6883,8 +7114,8 @@ function SimulationTab(_ref47) {
 }
 
 // 将来資産シミュレーター
-function FutureAssetSim(_ref48) {
-  var data = _ref48.data;
+function FutureAssetSim(_ref49) {
+  var data = _ref49.data;
   var totalAsset = function (_data$assets$nisa5, _data$assets$ideco5) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
@@ -6894,22 +7125,22 @@ function FutureAssetSim(_ref48) {
     }, 0);
     return b + i + (((_data$assets$ideco5 = data.assets.ideco) === null || _data$assets$ideco5 === void 0 ? void 0 : _data$assets$ideco5.currentValue) || 0);
   }();
-  var _useState91 = useState(totalAsset || 0),
-    _useState92 = _slicedToArray(_useState91, 2),
-    currentAsset = _useState92[0],
-    setCurrentAsset = _useState92[1];
-  var _useState93 = useState(50000),
-    _useState94 = _slicedToArray(_useState93, 2),
-    monthly = _useState94[0],
-    setMonthly = _useState94[1];
-  var _useState95 = useState(5),
+  var _useState95 = useState(totalAsset || 0),
     _useState96 = _slicedToArray(_useState95, 2),
-    rate = _useState96[0],
-    setRate = _useState96[1];
-  var _useState97 = useState(20),
+    currentAsset = _useState96[0],
+    setCurrentAsset = _useState96[1];
+  var _useState97 = useState(50000),
     _useState98 = _slicedToArray(_useState97, 2),
-    years = _useState98[0],
-    setYears = _useState98[1];
+    monthly = _useState98[0],
+    setMonthly = _useState98[1];
+  var _useState99 = useState(5),
+    _useState100 = _slicedToArray(_useState99, 2),
+    rate = _useState100[0],
+    setRate = _useState100[1];
+  var _useState101 = useState(20),
+    _useState102 = _slicedToArray(_useState101, 2),
+    years = _useState102[0],
+    setYears = _useState102[1];
   var calcFuture = function calcFuture(asset, mon, annualRate, yrs) {
     var r = annualRate / 100 / 12;
     var bal = asset;
@@ -7147,12 +7378,12 @@ function FutureAssetSim(_ref48) {
 }
 
 // ローン完済後シミュレーター
-function AfterLoanSim(_ref49) {
-  var data = _ref49.data;
-  var _useState99 = useState(5),
-    _useState100 = _slicedToArray(_useState99, 2),
-    rate = _useState100[0],
-    setRate = _useState100[1];
+function AfterLoanSim(_ref50) {
+  var data = _ref50.data;
+  var _useState103 = useState(5),
+    _useState104 = _slicedToArray(_useState103, 2),
+    rate = _useState104[0],
+    setRate = _useState104[1];
   var loans = _toConsumableArray(data.loans).sort(function (a, b) {
     var aMonths = a.monthlyPayment > 0 ? Math.ceil(a.remainingBalance / a.monthlyPayment) : 999;
     var bMonths = b.monthlyPayment > 0 ? Math.ceil(b.remainingBalance / b.monthlyPayment) : 999;
@@ -7307,32 +7538,32 @@ function AfterLoanSim(_ref49) {
 }
 
 // 老後資金シミュレーター
-function RetirementSim(_ref50) {
-  var data = _ref50.data;
-  var _useState101 = useState(35),
-    _useState102 = _slicedToArray(_useState101, 2),
-    age = _useState102[0],
-    setAge = _useState102[1];
-  var _useState103 = useState(65),
-    _useState104 = _slicedToArray(_useState103, 2),
-    retireAge = _useState104[0],
-    setRetireAge = _useState104[1];
-  var _useState105 = useState(90),
+function RetirementSim(_ref51) {
+  var data = _ref51.data;
+  var _useState105 = useState(35),
     _useState106 = _slicedToArray(_useState105, 2),
-    lifeAge = _useState106[0],
-    setLifeAge = _useState106[1];
-  var _useState107 = useState(150000),
+    age = _useState106[0],
+    setAge = _useState106[1];
+  var _useState107 = useState(65),
     _useState108 = _slicedToArray(_useState107, 2),
-    pension = _useState108[0],
-    setPension = _useState108[1];
-  var _useState109 = useState(2000000),
+    retireAge = _useState108[0],
+    setRetireAge = _useState108[1];
+  var _useState109 = useState(90),
     _useState110 = _slicedToArray(_useState109, 2),
-    severance = _useState110[0],
-    setSeverance = _useState110[1];
-  var _useState111 = useState(250000),
+    lifeAge = _useState110[0],
+    setLifeAge = _useState110[1];
+  var _useState111 = useState(150000),
     _useState112 = _slicedToArray(_useState111, 2),
-    monthlyLiving = _useState112[0],
-    setMonthlyLiving = _useState112[1];
+    pension = _useState112[0],
+    setPension = _useState112[1];
+  var _useState113 = useState(2000000),
+    _useState114 = _slicedToArray(_useState113, 2),
+    severance = _useState114[0],
+    setSeverance = _useState114[1];
+  var _useState115 = useState(250000),
+    _useState116 = _slicedToArray(_useState115, 2),
+    monthlyLiving = _useState116[0],
+    setMonthlyLiving = _useState116[1];
   var retireYears = retireAge - age;
   var lifeYears = lifeAge - retireAge;
 
@@ -7581,8 +7812,8 @@ function RetirementSim(_ref50) {
 }
 
 // FIRE試算
-function FireSim(_ref51) {
-  var data = _ref51.data;
+function FireSim(_ref52) {
+  var data = _ref52.data;
   var totalAsset = function (_data$assets$nisa7, _data$assets$ideco7) {
     var b = (data.assets.bankAccounts || []).reduce(function (a, x) {
       return a + x.balance;
@@ -7592,26 +7823,26 @@ function FireSim(_ref51) {
     }, 0);
     return b + i + (((_data$assets$ideco7 = data.assets.ideco) === null || _data$assets$ideco7 === void 0 ? void 0 : _data$assets$ideco7.currentValue) || 0);
   }();
-  var _useState113 = useState(totalAsset || 0),
-    _useState114 = _slicedToArray(_useState113, 2),
-    currentAsset = _useState114[0],
-    setCurrentAsset = _useState114[1];
-  var _useState115 = useState(250000),
-    _useState116 = _slicedToArray(_useState115, 2),
-    monthlyLiving = _useState116[0],
-    setMonthlyLiving = _useState116[1];
-  var _useState117 = useState(4),
+  var _useState117 = useState(totalAsset || 0),
     _useState118 = _slicedToArray(_useState117, 2),
-    withdrawRate = _useState118[0],
-    setWithdrawRate = _useState118[1];
-  var _useState119 = useState(100000),
+    currentAsset = _useState118[0],
+    setCurrentAsset = _useState118[1];
+  var _useState119 = useState(250000),
     _useState120 = _slicedToArray(_useState119, 2),
-    monthly = _useState120[0],
-    setMonthly = _useState120[1];
-  var _useState121 = useState(5),
+    monthlyLiving = _useState120[0],
+    setMonthlyLiving = _useState120[1];
+  var _useState121 = useState(4),
     _useState122 = _slicedToArray(_useState121, 2),
-    rate = _useState122[0],
-    setRate = _useState122[1];
+    withdrawRate = _useState122[0],
+    setWithdrawRate = _useState122[1];
+  var _useState123 = useState(100000),
+    _useState124 = _slicedToArray(_useState123, 2),
+    monthly = _useState124[0],
+    setMonthly = _useState124[1];
+  var _useState125 = useState(5),
+    _useState126 = _slicedToArray(_useState125, 2),
+    rate = _useState126[0],
+    setRate = _useState126[1];
   var annualLiving = monthlyLiving * 12;
   var fireTarget = Math.round(annualLiving / (withdrawRate / 100));
 
@@ -7858,9 +8089,9 @@ function FireSim(_ref51) {
 
 // ===== フェーズ15: CSV出力・JSONバックアップ =====
 
-function DataManagementPanel(_ref52) {
-  var data = _ref52.data,
-    updateData = _ref52.updateData;
+function DataManagementPanel(_ref53) {
+  var data = _ref53.data,
+    updateData = _ref53.updateData;
   var exportCSV = function exportCSV() {
     var header = "日付,カテゴリ,サブカテゴリ,金額,固定費,支払方法,メモ";
     var rows = data.expenses.map(function (e) {
@@ -7964,17 +8195,17 @@ function DataManagementPanel(_ref52) {
 }
 
 // ===== 財務諸表タブ =====
-function FinancialTab(_ref53) {
+function FinancialTab(_ref54) {
   var _data$assets$nisa8, _data$assets$ideco8;
-  var data = _ref53.data;
-  var _useState123 = useState(currentYM()),
-    _useState124 = _slicedToArray(_useState123, 2),
-    month = _useState124[0],
-    setMonth = _useState124[1];
-  var _useState125 = useState("bs"),
-    _useState126 = _slicedToArray(_useState125, 2),
-    subtab = _useState126[0],
-    setSubtab = _useState126[1];
+  var data = _ref54.data;
+  var _useState127 = useState(currentYM()),
+    _useState128 = _slicedToArray(_useState127, 2),
+    month = _useState128[0],
+    setMonth = _useState128[1];
+  var _useState129 = useState("bs"),
+    _useState130 = _slicedToArray(_useState129, 2),
+    subtab = _useState130[0],
+    setSubtab = _useState130[1];
 
   // ---- 共通計算ヘルパー ----
   var getSalary = function getSalary(ym) {
@@ -8034,7 +8265,10 @@ function FinancialTab(_ref53) {
   var annuityVal = (data.assets.variableAnnuities || []).reduce(function (a, v) {
     return a + (v.currentValue || 0);
   }, 0);
-  var totalAsset = totalBank + nisaVal + idecoVal + annuityVal;
+  var otherAssetVal = (data.assets.otherAssets || []).reduce(function (a, i) {
+    return a + (i.balance || 0);
+  }, 0);
+  var totalAsset = totalBank + nisaVal + idecoVal + annuityVal + otherAssetVal;
   var totalLiability = data.loans.reduce(function (a, l) {
     return a + (l.remainingBalance || 0);
   }, 0);
@@ -8308,12 +8542,12 @@ function FinancialTab(_ref53) {
     var varH = Math.round(varExp / maxVal * 180);
     var profitH = Math.max(Math.round(Math.abs(profit) / maxVal * 180), profit !== 0 ? 20 : 4);
     var isProfit = profit >= 0;
-    var Bar = function Bar(_ref54) {
-      var height = _ref54.height,
-        color = _ref54.color,
-        label = _ref54.label,
-        value = _ref54.value,
-        striped = _ref54.striped;
+    var Bar = function Bar(_ref55) {
+      var height = _ref55.height,
+        color = _ref55.color,
+        label = _ref55.label,
+        value = _ref55.value,
+        striped = _ref55.striped;
       return /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
@@ -8427,11 +8661,11 @@ function FinancialTab(_ref53) {
         color: colors.textLight,
         marginBottom: 6
       }
-    }, "\u8CBB\u7528\u5185\u8A33"), catBreakdown.map(function (_ref55) {
+    }, "\u8CBB\u7528\u5185\u8A33"), catBreakdown.map(function (_ref56) {
       var _expenseCategories$ca;
-      var _ref56 = _slicedToArray(_ref55, 2),
-        cat = _ref56[0],
-        amt = _ref56[1];
+      var _ref57 = _slicedToArray(_ref56, 2),
+        cat = _ref57[0],
+        amt = _ref57[1];
       var pct = expense > 0 ? amt / expense : 0;
       var catColor = ((_expenseCategories$ca = expenseCategories[cat]) === null || _expenseCategories$ca === void 0 ? void 0 : _expenseCategories$ca.color) || colors.neutral;
       return /*#__PURE__*/React.createElement("div", {
